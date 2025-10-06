@@ -417,10 +417,11 @@ write_terminal({
    ✅ write_terminal + read_terminal  // 正确方式
    ```
 
-2. **不要忘记 \n**
+2. **不要忘记 \n（除非你真的不需要）**
    ```
    ❌ write_terminal({ input: "npm start" })
    ✅ write_terminal({ input: "npm start\n" })
+   ✅ write_terminal({ input: "my-app", appendNewline: false })  // 需要发送 Ctrl+U/退格等原始输入时
    ```
 
 3. **不要立即读取输出**

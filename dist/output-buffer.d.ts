@@ -9,7 +9,50 @@ export declare class OutputBuffer extends EventEmitter {
     private maxSize;
     private currentLineNumber;
     private terminalId;
-    constructor(terminalId: string, maxSize?: number);
+    private currentLineEntry;
+    private sequenceCounter;
+    private oldestSequence;
+    private latestSequence;
+    private compactAnimations;
+    private animationThrottleMs;
+    private spinnerBuffer;
+    private spinnerCount;
+    private lastSpinnerFlush;
+    private spinnerFlushTimer;
+    private static readonly SPINNER_CHARS;
+    constructor(terminalId: string, maxSize?: number, options?: {
+        compactAnimations?: boolean;
+        animationThrottleMs?: number;
+    });
+    private nextSequence;
+    private stampSequence;
+    /**
+     * 检测字符串是否主要包含 spinner 字符
+     */
+    private isSpinnerLine;
+    /**
+     * 刷新 spinner 缓冲区
+     */
+    private flushSpinnerBuffer;
+    /**
+     * 清除 spinner 刷新定时器
+     */
+    private clearSpinnerTimer;
+    /**
+     * 创建新的缓冲条目
+     */
+    private createEntry;
+    private touchCurrentLine;
+    /**
+     * 结束当前行，将其标记为完成
+     */
+    private finalizeCurrentLine;
+    /**
+     * 修剪缓冲区，确保不超过最大容量
+     */
+    private trimBuffer;
+    private consumeEscapeSequence;
+    private handleEscapeSequence;
     /**
      * 添加新的输出内容
      */
@@ -32,6 +75,7 @@ export declare class OutputBuffer extends EventEmitter {
         totalLines: number;
         hasMore: boolean;
         truncated: boolean;
+        nextCursor: number;
         stats: {
             totalBytes: number;
             estimatedTokens: number;
@@ -78,5 +122,13 @@ export declare class OutputBuffer extends EventEmitter {
      * 检查是否有指定行号之后的新内容
      */
     hasNewContent(since: number): boolean;
+    /**
+     * 设置动画压缩选项
+     */
+    setCompactAnimations(enabled: boolean): void;
+    /**
+     * 获取动画压缩状态
+     */
+    getCompactAnimations(): boolean;
 }
 //# sourceMappingURL=output-buffer.d.ts.map

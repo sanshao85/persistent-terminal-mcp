@@ -58,6 +58,91 @@ describe('TerminalManager', () => {
       ).resolves.not.toThrow();
     });
 
+    test('should support raw input without auto newline', async () => {
+      const fakeId = 'fake-terminal';
+      const fakeWrite = jest.fn();
+      const fakeSession = {
+        id: fakeId,
+        pid: 12345,
+        shell: '/bin/bash',
+        cwd: process.cwd(),
+        env: {} as Record<string, string>,
+        created: new Date(),
+        lastActivity: new Date(),
+        status: 'active' as const
+      };
+
+      (terminalManager as any).ptyProcesses.set(fakeId, { write: fakeWrite });
+      (terminalManager as any).sessions.set(fakeId, fakeSession);
+
+      await terminalManager.writeToTerminal({
+        terminalId: fakeId,
+        input: '',
+        appendNewline: false
+      });
+
+      expect(fakeWrite).toHaveBeenCalledWith('');
+
+      (terminalManager as any).ptyProcesses.delete(fakeId);
+      (terminalManager as any).sessions.delete(fakeId);
+    });
+
+    test('should avoid auto newline for control characters by default', async () => {
+      const fakeId = 'control-terminal';
+      const fakeWrite = jest.fn();
+      const fakeSession = {
+        id: fakeId,
+        pid: 12346,
+        shell: '/bin/bash',
+        cwd: process.cwd(),
+        env: {} as Record<string, string>,
+        created: new Date(),
+        lastActivity: new Date(),
+        status: 'active' as const
+      };
+
+      (terminalManager as any).ptyProcesses.set(fakeId, { write: fakeWrite });
+      (terminalManager as any).sessions.set(fakeId, fakeSession);
+
+      await terminalManager.writeToTerminal({
+        terminalId: fakeId,
+        input: ''
+      });
+
+      expect(fakeWrite).toHaveBeenCalledWith('');
+
+      (terminalManager as any).ptyProcesses.delete(fakeId);
+      (terminalManager as any).sessions.delete(fakeId);
+    });
+
+    test('should auto append newline for printable text by default', async () => {
+      const fakeId = 'printable-terminal';
+      const fakeWrite = jest.fn();
+      const fakeSession = {
+        id: fakeId,
+        pid: 12347,
+        shell: '/bin/bash',
+        cwd: process.cwd(),
+        env: {} as Record<string, string>,
+        created: new Date(),
+        lastActivity: new Date(),
+        status: 'active' as const
+      };
+
+      (terminalManager as any).ptyProcesses.set(fakeId, { write: fakeWrite });
+      (terminalManager as any).sessions.set(fakeId, fakeSession);
+
+      await terminalManager.writeToTerminal({
+        terminalId: fakeId,
+        input: 'npm --version'
+      });
+
+      expect(fakeWrite).toHaveBeenCalledWith('npm --version\n');
+
+      (terminalManager as any).ptyProcesses.delete(fakeId);
+      (terminalManager as any).sessions.delete(fakeId);
+    });
+
     test('should read from terminal', async () => {
       // Send a command
       await terminalManager.writeToTerminal({
@@ -74,6 +159,9 @@ describe('TerminalManager', () => {
       expect(typeof result.output).toBe('string');
       expect(typeof result.totalLines).toBe('number');
       expect(typeof result.hasMore).toBe('boolean');
+      expect(typeof result.cursor).toBe('number');
+      expect(result.status).toBeDefined();
+      expect(typeof result.status?.isRunning).toBe('boolean');
     });
 
     test('should list terminals', async () => {
@@ -95,7 +183,8 @@ describe('TerminalManager', () => {
       await new Promise(resolve => setTimeout(resolve, 100));
       
       const session = terminalManager.getTerminalInfo(terminalId);
-      expect(session?.status).toBe('terminated');
+      expect(session).toBeUndefined();
+      expect(terminalManager.isTerminalActive(terminalId)).toBe(false);
     });
 
     test('should handle non-existent terminal', async () => {
@@ -146,12 +235,13 @@ describe('OutputBuffer', () => {
     expect(result.entries[0].content).toBe('line 1');
     expect(result.entries[1].content).toBe('line 2');
     expect(result.entries[2].content).toBe('line 3');
+    expect(result.nextCursor).toBeGreaterThan(0);
   });
 
   test('should handle buffer overflow', () => {
     // Add more lines than buffer size
     for (let i = 0; i < 15; i++) {
-      buffer.append(`line ${i}`);
+      buffer.append(`line ${i}\n`);
     }
     
     const result = buffer.read();
@@ -166,8 +256,8 @@ describe('OutputBuffer', () => {
     buffer.append('line 1\nline 2');
     const result1 = buffer.read();
     
-    buffer.append('line 3\nline 4');
-    const result2 = buffer.read({ since: result1.totalLines });
+    buffer.append('\nline 3\nline 4\n');
+    const result2 = buffer.read({ since: result1.nextCursor });
     
     expect(result2.entries.length).toBe(2);
     expect(result2.entries[0].content).toBe('line 3');
@@ -176,7 +266,7 @@ describe('OutputBuffer', () => {
 
   test('should get latest content', () => {
     for (let i = 0; i < 15; i++) {
-      buffer.append(`line ${i}`);
+      buffer.append(`line ${i}\n`);
     }
     
     const latest = buffer.getLatest(3);
@@ -201,5 +291,52 @@ describe('OutputBuffer', () => {
     expect(stats.totalLines).toBe(3);
     expect(stats.bufferedLines).toBe(3);
     expect(stats.maxSize).toBe(10);
+  });
+
+  test('should treat carriage returns as line rewrites', () => {
+    buffer.append('⠋ Installing dependencies');
+    buffer.append('\r⠙ Installing dependencies');
+    buffer.append('\r⠹ Installing dependencies\nDone!\n');
+
+    const result = buffer.read();
+    expect(result.entries.map(entry => entry.content)).toEqual([
+      '⠹ Installing dependencies',
+      'Done!'
+    ]);
+  });
+
+  test('should collapse consecutive blank lines', () => {
+    buffer.append('\n\n\n');
+
+    const result = buffer.read();
+    expect(result.entries.length).toBe(1);
+    expect(result.entries[0].content).toBe('');
+  });
+
+  test('should strip ansi color sequences', () => {
+    buffer.append('[33mHello[0m World\n');
+
+    const result = buffer.read();
+    expect(result.entries.map(entry => entry.content)).toEqual(['Hello World']);
+  });
+
+  test('should handle cursor movement escape sequences', () => {
+    buffer.append('[1G[0K⠋ Step 1');
+    buffer.append('\r');
+    buffer.append('[1G[0K⠙ Step 2\n');
+
+    const result = buffer.read();
+    expect(result.entries.map(entry => entry.content)).toEqual(['⠙ Step 2']);
+  });
+
+  test('should expose updated lines when using cursor-based reads', () => {
+    buffer.append('bash-3.2$ ');
+    const first = buffer.read();
+
+    buffer.append('npm install\r\n');
+    const second = buffer.read({ since: first.nextCursor });
+
+    const lines = second.entries.map(entry => entry.content);
+    expect(lines).toContain('bash-3.2$ npm install');
   });
 });

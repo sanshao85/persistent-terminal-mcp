@@ -10,6 +10,16 @@ export interface TerminalSession {
     created: Date;
     lastActivity: Date;
     status: 'active' | 'inactive' | 'terminated';
+    pendingCommand?: CommandRuntimeInfo | null;
+    lastCommand?: CommandRuntimeInfo | null;
+    lastPromptLine?: string | null;
+    lastPromptAt?: Date | null;
+    hasPrompt?: boolean;
+}
+export interface CommandRuntimeInfo {
+    command: string;
+    startedAt: Date;
+    completedAt?: Date | null;
 }
 export interface TerminalCreateOptions {
     shell?: string | undefined;
@@ -21,6 +31,7 @@ export interface TerminalCreateOptions {
 export interface TerminalWriteOptions {
     terminalId: string;
     input: string;
+    appendNewline?: boolean;
 }
 export interface TerminalReadOptions {
     terminalId: string;
@@ -29,12 +40,14 @@ export interface TerminalReadOptions {
     mode?: 'full' | 'head-tail' | 'head' | 'tail' | undefined;
     headLines?: number | undefined;
     tailLines?: number | undefined;
+    stripSpinner?: boolean | undefined;
 }
 export interface TerminalReadResult {
     output: string;
     totalLines: number;
     hasMore: boolean;
     since: number;
+    cursor?: number;
     truncated?: boolean;
     stats?: {
         totalBytes: number;
@@ -42,6 +55,20 @@ export interface TerminalReadResult {
         linesShown: number;
         linesOmitted: number;
     };
+    status?: TerminalReadStatus;
+}
+export interface TerminalReadStatus {
+    isRunning: boolean;
+    hasPrompt: boolean;
+    pendingCommand: CommandSummary | null;
+    lastCommand: CommandSummary | null;
+    promptLine: string | null;
+    lastActivity: string;
+}
+export interface CommandSummary {
+    command: string;
+    startedAt: string;
+    completedAt?: string | null;
 }
 export interface TerminalListResult {
     terminals: Array<{
@@ -58,6 +85,7 @@ export interface OutputBufferEntry {
     timestamp: Date;
     content: string;
     lineNumber: number;
+    sequence: number;
 }
 export interface BufferReadOptions {
     since?: number | undefined;
@@ -67,6 +95,7 @@ export interface BufferReadResult {
     entries: OutputBufferEntry[];
     totalLines: number;
     hasMore: boolean;
+    nextCursor: number;
 }
 export interface TerminalManagerConfig {
     maxBufferSize?: number;
@@ -74,6 +103,8 @@ export interface TerminalManagerConfig {
     defaultShell?: string;
     defaultCols?: number;
     defaultRows?: number;
+    compactAnimations?: boolean;
+    animationThrottleMs?: number;
 }
 export interface TerminalError extends Error {
     code: string;
@@ -94,6 +125,7 @@ export interface CreateTerminalResult {
 export interface WriteTerminalInput {
     terminalId: string;
     input: string;
+    appendNewline?: boolean;
 }
 export interface WriteTerminalResult {
     success: boolean;
@@ -106,6 +138,7 @@ export interface ReadTerminalInput {
     mode?: 'full' | 'head-tail' | 'head' | 'tail';
     headLines?: number;
     tailLines?: number;
+    stripSpinner?: boolean;
 }
 export interface TerminalStatsInput {
     terminalId: string;

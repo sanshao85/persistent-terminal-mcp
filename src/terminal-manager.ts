@@ -10,9 +10,12 @@ import {
   TerminalListResult,
   TerminalManagerConfig,
   TerminalError,
-  TerminalStatsResult
+  TerminalStatsResult,
+  TerminalReadStatus,
+  CommandRuntimeInfo
 } from './types.js';
 import { OutputBuffer } from './output-buffer.js';
+import { OutputBufferEntry } from './types.js';
 
 /**
  * 终端会话管理器
@@ -22,21 +25,29 @@ export class TerminalManager extends EventEmitter {
   private sessions = new Map<string, TerminalSession>();
   private ptyProcesses = new Map<string, any>();
   private outputBuffers = new Map<string, OutputBuffer>();
+  private exitPromises = new Map<string, Promise<void>>();
+  private exitResolvers = new Map<string, () => void>();
   private config: Required<TerminalManagerConfig>;
+  private cleanupTimer: NodeJS.Timeout;
 
   constructor(config: TerminalManagerConfig = {}) {
     super();
-    
+
     this.config = {
       maxBufferSize: config.maxBufferSize || 10000,
       sessionTimeout: config.sessionTimeout || 24 * 60 * 60 * 1000, // 24 hours
       defaultShell: config.defaultShell || (process.platform === 'win32' ? 'powershell.exe' : '/bin/bash'),
       defaultCols: config.defaultCols || 80,
-      defaultRows: config.defaultRows || 24
+      defaultRows: config.defaultRows || 24,
+      compactAnimations: config.compactAnimations ?? true,
+      animationThrottleMs: config.animationThrottleMs || 100
     };
 
     // 定期清理超时的会话
-    setInterval(() => this.cleanupTimeoutSessions(), 60000); // 每分钟检查一次
+    this.cleanupTimer = setInterval(() => this.cleanupTimeoutSessions(), 60000); // 每分钟检查一次
+    if (typeof this.cleanupTimer.unref === 'function') {
+      this.cleanupTimer.unref();
+    }
   }
 
   /**
@@ -44,7 +55,7 @@ export class TerminalManager extends EventEmitter {
    */
   async createTerminal(options: TerminalCreateOptions = {}): Promise<string> {
     const terminalId = uuidv4();
-    
+
     const {
       shell = this.config.defaultShell,
       cwd = process.cwd(),
@@ -54,14 +65,35 @@ export class TerminalManager extends EventEmitter {
     } = options;
 
     try {
+      // 确保环境变量中包含 TERM，这对交互式应用很重要
+      const ptyEnv = {
+        ...env,
+        TERM: env.TERM || 'xterm-256color',
+        // 确保 LANG 设置正确，避免编码问题
+        LANG: env.LANG || 'en_US.UTF-8',
+        // 禁用一些可能干扰输出的环境变量
+        PAGER: env.PAGER || 'cat',
+      };
+
       // 创建 PTY 进程
       const ptyProcess = spawn(shell, [], {
-        name: 'xterm-color',
+        name: 'xterm-256color',  // 修复：使用正确的终端类型
         cols,
         rows,
         cwd,
-        env
+        env: ptyEnv,
+        // 启用 UTF-8 编码
+        encoding: 'utf8' as any
       });
+
+      let resolveExit: (() => void) | null = null;
+      const exitPromise = new Promise<void>((resolve) => {
+        resolveExit = resolve;
+      });
+      this.exitPromises.set(terminalId, exitPromise);
+      if (resolveExit) {
+        this.exitResolvers.set(terminalId, resolveExit);
+      }
 
       // 创建会话记录
       const session: TerminalSession = {
@@ -72,17 +104,34 @@ export class TerminalManager extends EventEmitter {
         env,
         created: new Date(),
         lastActivity: new Date(),
-        status: 'active'
+        status: 'active',
+        pendingCommand: null,
+        lastCommand: null,
+        lastPromptLine: null,
+        lastPromptAt: null,
+        hasPrompt: false
       };
 
       // 创建输出缓冲器
-      const outputBuffer = new OutputBuffer(terminalId, this.config.maxBufferSize);
+      const outputBuffer = new OutputBuffer(terminalId, this.config.maxBufferSize, {
+        compactAnimations: this.config.compactAnimations,
+        animationThrottleMs: this.config.animationThrottleMs
+      });
+
+      // 监听输出缓冲的更新以追踪提示符和命令状态
+      outputBuffer.on('data', (entries: OutputBufferEntry[]) => {
+        this.processBufferEntries(session, entries);
+      });
 
       // 监听 PTY 输出
+      // 使用 setImmediate 确保数据立即被处理，避免缓冲延迟
       ptyProcess.onData((data: string) => {
-        session.lastActivity = new Date();
-        outputBuffer.append(data);
-        this.emit('terminalOutput', terminalId, data);
+        setImmediate(() => {
+          const now = new Date();
+          session.lastActivity = now;
+          outputBuffer.append(data);
+          this.emit('terminalOutput', terminalId, data);
+        });
       });
 
       // 监听 PTY 退出
@@ -91,10 +140,19 @@ export class TerminalManager extends EventEmitter {
         session.lastActivity = new Date();
         this.emit('terminalExit', terminalId, e.exitCode, e.signal);
 
+        const resolver = this.exitResolvers.get(terminalId);
+        if (resolver) {
+          resolver();
+          this.exitResolvers.delete(terminalId);
+        }
+
         // 清理资源
-        setTimeout(() => {
+        const cleanupTimer = setTimeout(() => {
           this.cleanupSession(terminalId);
         }, 5000); // 5秒后清理
+        if (typeof cleanupTimer.unref === 'function') {
+          cleanupTimer.unref();
+        }
       });
 
       // 存储会话信息
@@ -117,7 +175,7 @@ export class TerminalManager extends EventEmitter {
    * 向终端写入数据
    */
   async writeToTerminal(options: TerminalWriteOptions): Promise<void> {
-    const { terminalId, input } = options;
+    const { terminalId, input, appendNewline } = options;
 
     const ptyProcess = this.ptyProcesses.get(terminalId);
     const session = this.sessions.get(terminalId);
@@ -139,16 +197,64 @@ export class TerminalManager extends EventEmitter {
     try {
       // 如果输入不以换行符结尾，自动添加换行符以执行命令
       // 这样用户可以直接发送 "ls" 而不需要手动添加 "\n"
-      const inputToWrite = input.endsWith('\n') || input.endsWith('\r') ? input : input + '\n';
-      ptyProcess.write(inputToWrite);
+      const autoAppend = appendNewline ?? this.shouldAutoAppendNewline(input);
+      const needsNewline = autoAppend && !input.endsWith('\n') && !input.endsWith('\r');
+      const inputToWrite = needsNewline ? input + '\n' : input;
+
+      // 写入数据到 PTY
+      // node-pty 的 write 方法是同步的，但我们需要确保数据被发送
+      const written = ptyProcess.write(inputToWrite);
+
+      // 如果写入失败（返回 false），等待 drain 事件
+      if (written === false) {
+        await new Promise<void>((resolve) => {
+          const onDrain = () => {
+            ptyProcess.off('drain', onDrain);
+            resolve();
+          };
+          ptyProcess.on('drain', onDrain);
+          // 设置超时，避免永久等待
+          setTimeout(() => {
+            ptyProcess.off('drain', onDrain);
+            resolve();
+          }, 5000);
+        });
+      }
+
       session.lastActivity = new Date();
       this.emit('terminalInput', terminalId, inputToWrite);
+
+      const executed = /[\n\r]$/.test(inputToWrite);
+      this.trackCommand(session, inputToWrite, executed);
+
+      // 给 PTY 一点时间处理输入
+      // 这对于交互式应用特别重要
+      await new Promise(resolve => setImmediate(resolve));
     } catch (error) {
       const terminalError: TerminalError = new Error(`Failed to write to terminal: ${error}`) as TerminalError;
       terminalError.code = 'WRITE_FAILED';
       terminalError.terminalId = terminalId;
       throw terminalError;
     }
+  }
+
+  private shouldAutoAppendNewline(input: string): boolean {
+    if (!input) {
+      return false;
+    }
+
+    if (input.includes('')) {
+      return false;
+    }
+
+    for (let i = 0; i < input.length; i++) {
+      const code = input.charCodeAt(i);
+      if ((code < 32 || code === 127) && code !== 9 && code !== 10 && code !== 13) {
+        return false;
+      }
+    }
+
+    return true;
   }
 
   /**
@@ -168,10 +274,15 @@ export class TerminalManager extends EventEmitter {
     }
 
     try {
+      // 给一个很小的延迟，确保 onData 事件中的数据已经被处理
+      // 这解决了"读取到旧数据"的问题
+      await new Promise(resolve => setImmediate(resolve));
       // 如果指定了智能读取模式，使用新的 readSmart 方法
+      const cursorPosition = since ?? 0;
+
       if (mode && mode !== 'full') {
         const smartOptions: any = {
-          since,
+          since: cursorPosition,
           mode,
           maxLines
         };
@@ -200,21 +311,25 @@ export class TerminalManager extends EventEmitter {
           output,
           totalLines: result.totalLines,
           hasMore: result.hasMore,
-          since: result.entries.length > 0 ? result.entries[result.entries.length - 1]!.lineNumber + 1 : since,
+          since: result.nextCursor,
+          cursor: result.nextCursor,
           truncated: result.truncated,
-          stats: result.stats
+          stats: result.stats,
+          status: this.buildReadStatus(session)
         };
       }
 
       // 使用原有的读取方法
-      const result = outputBuffer.read({ since, maxLines });
+      const result = outputBuffer.read({ since: cursorPosition, maxLines });
       const output = result.entries.map(entry => entry.content).join('\n');
 
       return {
         output,
         totalLines: result.totalLines,
         hasMore: result.hasMore,
-        since: result.entries.length > 0 ? result.entries[result.entries.length - 1]!.lineNumber + 1 : since
+        since: result.nextCursor,
+        cursor: result.nextCursor,
+        status: this.buildReadStatus(session)
       };
     } catch (error) {
       const terminalError: TerminalError = new Error(`Failed to read from terminal: ${error}`) as TerminalError;
@@ -257,6 +372,58 @@ export class TerminalManager extends EventEmitter {
   }
 
   /**
+   * 检查终端是否正在运行命令
+   * 通过检查最后一次活动时间来判断
+   */
+  isTerminalBusy(terminalId: string): boolean {
+    const session = this.sessions.get(terminalId);
+    if (!session) {
+      return false;
+    }
+
+    if (session.pendingCommand) {
+      return true;
+    }
+
+    // 如果最后活动时间在 100ms 内，认为终端正在忙碌
+    const timeSinceLastActivity = Date.now() - session.lastActivity.getTime();
+    return timeSinceLastActivity < 100;
+  }
+
+  /**
+   * 等待终端输出稳定
+   * 用于确保命令执行完成后再读取输出
+   */
+  async waitForOutputStable(terminalId: string, timeout: number = 5000, stableTime: number = 500): Promise<void> {
+    const session = this.sessions.get(terminalId);
+    if (!session) {
+      throw new Error(`Terminal ${terminalId} not found`);
+    }
+
+    const startTime = Date.now();
+    let lastActivityTime = session.lastActivity.getTime();
+
+    while (Date.now() - startTime < timeout) {
+      const currentActivityTime = session.lastActivity.getTime();
+
+      // 如果输出已经稳定（在 stableTime 内没有新输出）
+      if (Date.now() - currentActivityTime > stableTime) {
+        return;
+      }
+
+      // 如果有新的活动，更新时间
+      if (currentActivityTime > lastActivityTime) {
+        lastActivityTime = currentActivityTime;
+      }
+
+      // 等待一小段时间再检查
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+
+    // 超时也返回，不抛出错误
+  }
+
+  /**
    * 列出所有终端会话
    */
   async listTerminals(): Promise<TerminalListResult> {
@@ -279,6 +446,7 @@ export class TerminalManager extends EventEmitter {
   async killTerminal(terminalId: string, signal = 'SIGTERM'): Promise<void> {
     const ptyProcess = this.ptyProcesses.get(terminalId);
     const session = this.sessions.get(terminalId);
+    const exitPromise = this.exitPromises.get(terminalId);
 
     if (!ptyProcess || !session) {
       const error: TerminalError = new Error(`Terminal ${terminalId} not found`) as TerminalError;
@@ -293,10 +461,19 @@ export class TerminalManager extends EventEmitter {
       session.lastActivity = new Date();
       this.emit('terminalKilled', terminalId, signal);
 
+      await this.waitForPtyExit(terminalId, ptyProcess, exitPromise);
+
+      const buffer = this.outputBuffers.get(terminalId);
+      if (buffer) {
+        buffer.removeAllListeners();
+      }
+
       // 清理资源：从 Map 中删除已终止的终端
       this.ptyProcesses.delete(terminalId);
       this.outputBuffers.delete(terminalId);
       this.sessions.delete(terminalId);
+      this.exitPromises.delete(terminalId);
+      this.exitResolvers.delete(terminalId);
     } catch (error) {
       const terminalError: TerminalError = new Error(`Failed to kill terminal: ${error}`) as TerminalError;
       terminalError.code = 'KILL_FAILED';
@@ -363,12 +540,42 @@ export class TerminalManager extends EventEmitter {
     }
 
     if (outputBuffer) {
+      outputBuffer.removeAllListeners();
       outputBuffer.clear();
       this.outputBuffers.delete(terminalId);
     }
 
     this.sessions.delete(terminalId);
+    this.exitPromises.delete(terminalId);
+    this.exitResolvers.delete(terminalId);
     this.emit('terminalCleaned', terminalId);
+  }
+
+  private async waitForPtyExit(terminalId: string, ptyProcess: any, exitPromise?: Promise<void>) {
+    if (!exitPromise) {
+      return;
+    }
+
+    const waitWithTimeout = async (timeoutMs: number): Promise<boolean> => {
+      return await Promise.race([
+        exitPromise.then(() => true).catch(() => true),
+        new Promise<boolean>((resolve) => setTimeout(() => resolve(false), timeoutMs))
+      ]);
+    };
+
+    const graceTimeout = this.config.sessionTimeout > 0 ? Math.min(2000, this.config.sessionTimeout) : 2000;
+    const exitedInGrace = await waitWithTimeout(graceTimeout);
+    if (exitedInGrace) {
+      return;
+    }
+
+    try {
+      ptyProcess.kill('SIGKILL');
+    } catch {
+      // ignore kill escalation errors
+    }
+
+    await waitWithTimeout(500);
   }
 
   /**
@@ -382,7 +589,9 @@ export class TerminalManager extends EventEmitter {
       const timeSinceLastActivity = now.getTime() - session.lastActivity.getTime();
 
       if (session.status === 'terminated' || timeSinceLastActivity > timeoutThreshold) {
-        console.log(`Cleaning up timeout session: ${terminalId}`);
+        if (process.env.MCP_DEBUG === 'true') {
+          process.stderr.write(`[MCP-DEBUG] Cleaning up timeout session: ${terminalId}\n`);
+        }
         this.cleanupSession(terminalId);
       }
     }
@@ -409,7 +618,9 @@ export class TerminalManager extends EventEmitter {
    * 关闭管理器，清理所有资源
    */
   async shutdown(): Promise<void> {
-    console.log('Shutting down terminal manager...');
+    if (process.env.MCP_DEBUG === 'true') {
+      process.stderr.write('[MCP-DEBUG] Shutting down terminal manager...\n');
+    }
 
     // 终止所有活跃的终端
     const activeTerminals = Array.from(this.sessions.keys());
@@ -417,7 +628,9 @@ export class TerminalManager extends EventEmitter {
       try {
         await this.killTerminal(terminalId, 'SIGTERM');
       } catch (error) {
-        console.error(`Error killing terminal ${terminalId}:`, error);
+        if (process.env.MCP_DEBUG === 'true') {
+          process.stderr.write(`[MCP-DEBUG] Error killing terminal ${terminalId}: ${error}\n`);
+        }
       }
     }
 
@@ -430,6 +643,171 @@ export class TerminalManager extends EventEmitter {
     }
 
     this.emit('shutdown');
-    console.log('Terminal manager shutdown complete');
+    clearInterval(this.cleanupTimer);
+    if (process.env.MCP_DEBUG === 'true') {
+      process.stderr.write('[MCP-DEBUG] Terminal manager shutdown complete\n');
+    }
+  }
+
+  private processBufferEntries(session: TerminalSession, entries: OutputBufferEntry[]): void {
+    if (!entries || entries.length === 0) {
+      return;
+    }
+
+    const seen = new Set<number>();
+    let promptDetected = false;
+
+    for (const entry of entries) {
+      if (!entry || seen.has(entry.sequence)) {
+        continue;
+      }
+      seen.add(entry.sequence);
+
+      const content = entry.content ?? '';
+      if (!content) {
+        continue;
+      }
+
+      if (this.isPromptLine(content)) {
+        promptDetected = true;
+        session.hasPrompt = true;
+        session.lastPromptLine = content;
+        session.lastPromptAt = entry.timestamp || new Date();
+
+        if (session.pendingCommand) {
+          session.pendingCommand.completedAt = new Date();
+          session.lastCommand = {
+            command: session.pendingCommand.command,
+            startedAt: session.pendingCommand.startedAt,
+            completedAt: session.pendingCommand.completedAt
+          };
+          session.pendingCommand = null;
+        }
+      }
+    }
+
+    if (!promptDetected && entries.length > 0 && session.pendingCommand) {
+      session.hasPrompt = false;
+    }
+  }
+
+  private trackCommand(session: TerminalSession, rawInput: string, executed: boolean): void {
+    if (!session || !executed) {
+      return;
+    }
+
+    const commandText = this.extractCommandText(rawInput);
+    if (!commandText) {
+      return;
+    }
+
+    const commandInfo: CommandRuntimeInfo = {
+      command: commandText,
+      startedAt: new Date(),
+      completedAt: null
+    };
+
+    session.pendingCommand = commandInfo;
+    session.hasPrompt = false;
+  }
+
+  private extractCommandText(rawInput: string): string | null {
+    if (!rawInput) {
+      return null;
+    }
+
+    const normalized = rawInput.replace(/\r/g, '\n').split('\n');
+    for (let i = normalized.length - 1; i >= 0; i--) {
+      const line = normalized[i];
+      if (!line) {
+        continue;
+      }
+      const trimmed = line.trim();
+      if (!trimmed) {
+        continue;
+      }
+      if (this.isMostlyPrintable(trimmed)) {
+        return trimmed.slice(0, 500);
+      }
+    }
+
+    return null;
+  }
+
+  private isMostlyPrintable(value: string): boolean {
+    if (!value) {
+      return false;
+    }
+
+    let printable = 0;
+    for (let i = 0; i < value.length; i++) {
+      const code = value.charCodeAt(i);
+      if (code === 9 || code === 32 || code >= 33) {
+        printable++;
+      }
+    }
+
+    return printable > 0 && printable / value.length >= 0.6;
+  }
+
+  private isPromptLine(line: string): boolean {
+    if (!line) {
+      return false;
+    }
+
+    const trimmedEnd = line.trimEnd();
+    if (!trimmedEnd) {
+      return false;
+    }
+
+    const promptSuffixes = ['$', '#', '%', '>', ':'];
+
+    // Common case: prompt ends with symbol and space
+    for (const suffix of promptSuffixes) {
+      if (line.endsWith(`${suffix} `)) {
+        const prefix = trimmedEnd.slice(0, -1).trim();
+        if (prefix.length > 0) {
+          return true;
+        }
+      }
+    }
+
+    // Prompts without trailing space
+    const lastChar = trimmedEnd.charAt(trimmedEnd.length - 1);
+    if (promptSuffixes.includes(lastChar)) {
+      const prefix = trimmedEnd.slice(0, -1).trim();
+      if (prefix.length > 0 && /[a-zA-Z0-9_@~\/\]\)]$/.test(prefix)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  private buildReadStatus(session: TerminalSession): TerminalReadStatus {
+    const pending = session.pendingCommand
+      ? {
+          command: session.pendingCommand.command,
+          startedAt: session.pendingCommand.startedAt.toISOString(),
+          completedAt: session.pendingCommand.completedAt ? session.pendingCommand.completedAt.toISOString() : null
+        }
+      : null;
+
+    const lastCommand = session.lastCommand
+      ? {
+          command: session.lastCommand.command,
+          startedAt: session.lastCommand.startedAt.toISOString(),
+          completedAt: session.lastCommand.completedAt ? session.lastCommand.completedAt.toISOString() : null
+        }
+      : null;
+
+    return {
+      isRunning: Boolean(session.pendingCommand),
+      hasPrompt: Boolean(session.hasPrompt),
+      pendingCommand: pending,
+      lastCommand,
+      promptLine: session.lastPromptLine ?? null,
+      lastActivity: session.lastActivity.toISOString()
+    };
   }
 }

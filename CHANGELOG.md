@@ -7,15 +7,87 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+#### 🔴 Critical: Terminal command execution and interaction issues
+- **Problem 1: Commands not executing properly**
+  - Commands sent to terminal were not being executed
+  - No command echo visible in output
+  - Terminal line count increased but content was invisible
+- **Problem 2: Interactive input handling unstable**
+  - Control characters (arrow keys, enter) not working reliably
+  - Interface not updating in interactive applications
+  - Required multiple key presses for single action
+- **Problem 3: Output reading not real-time**
+  - Reading stale output instead of latest
+  - Required multiple reads to get current state
+  - No way to detect if command is still running
+- **Solution**:
+  - Fixed PTY configuration: Changed from `xterm-color` to `xterm-256color`
+  - Added proper environment variables: `TERM`, `LANG`, `PAGER`
+  - Improved write logic with drain event handling
+  - Added `setImmediate` for immediate data processing
+  - Added `waitForOutputStable()` method to detect output completion
+  - Added `wait_for_output` MCP tool for waiting until output stabilizes
+- **Impact**: Full support for interactive applications (vim, npm create, etc.)
+- **Testing**: All 6 tests pass in `test-terminal-fixes.mjs`
+- **Documentation**: See [TERMINAL_FIXES.md](TERMINAL_FIXES.md) for detailed analysis
+
+#### 🔴 Critical: Stdio channel pollution causing Cursor compatibility issues
+- **Problem**: Console logging was polluting stdout, causing JSON parsing errors in Cursor and other strict MCP clients
+  - Error: `Unexpected token 'T', "Terminal c"... is not valid JSON`
+  - Cursor would freeze after a few commands
+  - MCP protocol requires stdout to contain only JSON-RPC messages
+- **Solution**: All logging now uses `process.stderr.write()` instead of `console.log/error`
+  - Debug logs controlled by `MCP_DEBUG` environment variable
+  - All logs output to stderr, keeping stdout pure for JSON-RPC
+- **Impact**: Full compatibility with Cursor and other strict MCP clients
+- **Backward Compatible**: Yes - no API changes, only logging behavior
+- **Files Modified**:
+  - `src/index.ts` - Fixed log function and error handlers
+  - `src/mcp-server.ts` - Fixed event handlers and shutdown logging
+  - `src/terminal-manager.ts` - Fixed cleanup and shutdown logging
+- **Testing**: Added comprehensive stdio purity tests
+  - `test-mcp-stdio.mjs` - Validates stdout contains only JSON-RPC
+  - `test-cursor-scenario.mjs` - Simulates real Cursor usage scenarios
+- **Documentation**: See [STDIO_FIX.md](STDIO_FIX.md) for detailed analysis
+
 ### Added
+- **Spinner Animation Compaction**: Automatically detects and throttles progress animations
+  - Identifies common spinner characters (⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏, ◐◓◑◒, etc.)
+  - Reduces noise from `npm install`, `yarn`, `pnpm` and similar commands
+  - Configurable via `COMPACT_ANIMATIONS` and `ANIMATION_THROTTLE_MS` environment variables
+  - Enabled by default with 100ms throttle
+  - Can be toggled per-read via `stripSpinner` parameter
+  - See [Spinner Compaction Guide](docs/guides/spinner-compaction.md) for details
+- **`wait_for_output` MCP tool**: Wait for terminal output to stabilize before reading
+  - Parameters: `terminalId`, `timeout` (default: 5000ms), `stableTime` (default: 500ms)
+  - Useful for ensuring complete output capture after running commands
+  - Helps with interactive applications and long-running commands
+- **`waitForOutputStable()` method**: Programmatic API for waiting for output stability
+- **`isTerminalBusy()` method**: Check if terminal is currently processing output
 - `create_terminal_basic` MCP tool to support clients that can only send simple
   string arguments
 - Open-source collateral: MIT `LICENSE` and `CONTRIBUTING.md`
+- Comprehensive test suite for spinner detection (12 new tests)
+- Comprehensive test suite for terminal fixes (6 new tests)
+- Example script: `npm run example:spinner`
+- Test script: `test-terminal-fixes.mjs`
+- `MCP_DEBUG` environment variable for controlling debug output
 
 ### Changed
+- **PTY Configuration**: Changed terminal type from `xterm-color` to `xterm-256color`
+- **Environment Variables**: Now sets `TERM`, `LANG`, and `PAGER` for better compatibility
+- **Write Logic**: Improved with drain event handling and immediate processing
+- **Read Logic**: Added `setImmediate` to ensure latest data is captured
+- **Output Capture**: Using `setImmediate` in `onData` handler for immediate processing
+- `OutputBuffer` constructor now accepts `compactAnimations` and `animationThrottleMs` options
+- `TerminalManagerConfig` extended with animation compaction settings
+- `read_terminal` MCP tool now supports optional `stripSpinner` parameter
 - Consolidated documentation under [`docs/`](docs/README.md) with clearer
   filenames and an index
 - Refreshed `README.md` with quick-start instructions and the expanded tool set
+- All logging now uses stderr to comply with MCP stdio protocol requirements
 
 ## [1.0.1] - 2025-10-03
 

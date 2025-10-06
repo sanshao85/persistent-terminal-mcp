@@ -5,6 +5,7 @@
 ## 主要特性
 - **持久化 PTY 会话**：创建、复用、终止长期运行的 Shell
 - **智能输出缓冲**：支持增量读取、head/tail/head-tail 模式，并估算 token 数量
+- **Spinner 动画压缩**：自动检测并节流进度动画（如 npm install 的 spinner），减少噪音并保留真实日志
 - **完整会话管理**：获取统计信息、列出活跃终端、发送信号、自动清理
 - **MCP 原生支持**：内置工具、资源、提示，可直接在 Claude Desktop / Claude Code 等客户端使用
 - **可选 REST API**：提供 Express 版接口，方便非 MCP 场景集成
@@ -22,6 +23,12 @@ npm run dev          # MCP 服务器 (tsx)
 npm run dev:rest     # REST 服务器 (tsx)
 ```
 
+### 调试模式
+启用调试日志（输出到 stderr，不会干扰 MCP 通信）：
+```bash
+MCP_DEBUG=true npm start
+```
+
 ### 示例脚本
 ```bash
 npm run example:basic        # 演示创建 → 写入 → 读取 → 终止
@@ -37,6 +44,7 @@ npm run test:fixes           # 针对关键修复的回归测试
 | `create_terminal_basic` | 精简版创建入口，适配参数受限的客户端 |
 | `write_terminal` | 向终端写入命令；若缺少换行会自动补全 |
 | `read_terminal` | 读取缓冲输出，支持智能截断策略 |
+| `wait_for_output` | 等待终端输出稳定（执行命令后确保获取完整输出） |
 | `get_terminal_stats` | 查看缓冲区大小、行数、token 估算与活动状态 |
 | `list_terminals` | 列出所有活跃终端及其元数据 |
 | `kill_terminal` | 终止会话并可选择发送自定义信号 |
@@ -59,18 +67,40 @@ npm run start:rest
 ## 项目结构
 ```
 docs/                → 文档索引及多语言资料
+  ├── guides/        → 使用指南和教程
+  ├── reference/     → 技术参考和修复文档
+  │   └── fixes/     → 所有修复文档
+  ├── clients/       → 客户端配置说明
+  └── zh/            → 中文文档
 scripts/             → 本地调试用脚本
-src/                 → TypeScript 源码（MCP、REST、示例）
+src/                 → TypeScript 源码
+  ├── __tests__/     → 单元测试
+  └── examples/      → 示例脚本
+tests/               → 测试套件
+  └── integration/   → 集成测试
 dist/                → 编译后的 JavaScript 产物
 ```
 
 ### 文档导航
-所有使用说明、排错指南、技术细节及中文版教程均收录在 [`docs/`](docs/README.md)。主要入口：
-- `docs/guides/usage.md` – AI 使用指南
-- `docs/guides/troubleshooting.md` – 常见故障排查
-- `docs/clients/claude-code-setup.md` – Claude Desktop / Claude Code 配置说明
-- `docs/reference/technical-details.md` – 技术架构与实现细节
-- `docs/zh/` – 中文快速开始、提示词合集、测试反馈
+所有文档均在 [`docs/`](docs/README.md) 目录下：
+
+**快速访问：**
+- 📖 [文档索引](docs/README.md) – 完整文档地图
+- 🚨 [修复索引](docs/reference/fixes/README.md) – 所有修复和解决方案
+- 🧪 [集成测试](tests/integration/README.md) – 测试套件
+
+**按分类：**
+- **指南**: 使用说明、故障排查、MCP 配置
+- **参考**: 技术细节、工具总结、Bug 修复
+- **修复**: Stdio 修复、Cursor 修复、终端修复
+- **客户端**: Claude Desktop / Claude Code 配置
+- **中文**: 中文文档资料
+
+### 重要说明
+- **Stdio 纯净性**：本 MCP 服务器严格遵循 MCP 协议，确保 stdout 只包含 JSON-RPC 消息，所有日志输出到 stderr。详见 [docs/reference/fixes/STDIO_FIX.md](docs/reference/fixes/STDIO_FIX.md)。
+- **Cursor 兼容性**：完全兼容 Cursor 及其他要求严格 JSON-RPC 通信的 MCP 客户端。快速设置见 [docs/reference/fixes/QUICK_FIX_GUIDE.md](docs/reference/fixes/QUICK_FIX_GUIDE.md)。
+- **终端交互**：支持交互式应用（vim、npm create 等），正确处理 ANSI 转义序列。详见 [docs/reference/fixes/TERMINAL_FIXES.md](docs/reference/fixes/TERMINAL_FIXES.md)。
+- **输出稳定性**：使用 `wait_for_output` 工具确保命令执行后获取完整输出。
 
 ## 贡献指南
 欢迎提 Issue 或 PR！详细流程与代码规范见 [`CONTRIBUTING.md`](CONTRIBUTING.md)。

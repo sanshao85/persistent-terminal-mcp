@@ -131,7 +131,7 @@ export class RestApiServer {
         this.app.post('/terminals/:terminalId/input', async (req, res) => {
             try {
                 const terminalId = req.params.terminalId;
-                const { input } = req.body;
+                const { input, appendNewline } = req.body;
                 if (!terminalId) {
                     res.status(400).json({ error: 'Terminal ID is required' });
                     return;
@@ -142,7 +142,14 @@ export class RestApiServer {
                     });
                     return;
                 }
-                await this.terminalManager.writeToTerminal({ terminalId, input });
+                const writeOptions = {
+                    terminalId,
+                    input
+                };
+                if (appendNewline !== undefined) {
+                    writeOptions.appendNewline = appendNewline;
+                }
+                await this.terminalManager.writeToTerminal(writeOptions);
                 res.json({
                     success: true,
                     message: 'Input sent successfully'

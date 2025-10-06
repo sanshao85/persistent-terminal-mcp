@@ -34,6 +34,8 @@ export class PersistentTerminalMcpServer {
         this.terminalManager = new TerminalManager({
             maxBufferSize: parseInt(process.env.MAX_BUFFER_SIZE || '10000'),
             sessionTimeout: parseInt(process.env.SESSION_TIMEOUT || '86400000'), // 24 hours
+            compactAnimations: process.env.COMPACT_ANIMATIONS !== 'false', // Default true
+            animationThrottleMs: parseInt(process.env.ANIMATION_THROTTLE_MS || '100')
         });
         this.setupTools();
         this.setupResources();
@@ -149,15 +151,23 @@ export class PersistentTerminalMcpServer {
             }
         });
         // 写入终端工具
-        this.server.tool('write_terminal', 'Write input to a terminal session. Commands will be automatically executed (newline added if not present).', {
+        this.server.tool('write_terminal', 'Write input to a terminal session. Commands add a newline by default, but you can disable that for raw control sequences.', {
             terminalId: z.string().describe('Terminal session ID'),
-            input: z.string().describe('Input to send to the terminal. Newline will be automatically added if not present to execute the command.')
+            input: z.string().describe('Input to send to the terminal. Newline will be automatically added if not present to execute the command.'),
+            appendNewline: z.boolean().optional().describe('Whether to automatically append a newline (default: true). Set to false for raw control sequences like Ctrl+U or backspace.')
         }, {
             title: 'Write to Terminal',
             readOnlyHint: false
-        }, async ({ terminalId, input }) => {
+        }, async ({ terminalId, input, appendNewline }) => {
             try {
-                await this.terminalManager.writeToTerminal({ terminalId, input });
+                const writeOptions = {
+                    terminalId,
+                    input
+                };
+                if (appendNewline !== undefined) {
+                    writeOptions.appendNewline = appendNewline;
+                }
+                await this.terminalManager.writeToTerminal(writeOptions);
                 return {
                     content: [
                         {
@@ -186,11 +196,12 @@ export class PersistentTerminalMcpServer {
             maxLines: z.number().optional().describe('Maximum number of lines to read (default: 1000)'),
             mode: z.enum(['full', 'head', 'tail', 'head-tail']).optional().describe('Reading mode: full (default), head (first N lines), tail (last N lines), or head-tail (first + last N lines)'),
             headLines: z.number().optional().describe('Number of lines to show from the beginning when using head or head-tail mode (default: 50)'),
-            tailLines: z.number().optional().describe('Number of lines to show from the end when using tail or head-tail mode (default: 50)')
+            tailLines: z.number().optional().describe('Number of lines to show from the end when using tail or head-tail mode (default: 50)'),
+            stripSpinner: z.boolean().optional().describe('Whether to strip spinner/animation frames (uses global setting if not specified)')
         }, {
             title: 'Read Terminal Output',
             readOnlyHint: true
-        }, async ({ terminalId, since, maxLines, mode, headLines, tailLines }) => {
+        }, async ({ terminalId, since, maxLines, mode, headLines, tailLines, stripSpinner }) => {
             try {
                 const result = await this.terminalManager.readFromTerminal({
                     terminalId,
@@ -198,12 +209,13 @@ export class PersistentTerminalMcpServer {
                     maxLines: maxLines || undefined,
                     mode: mode || undefined,
                     headLines: headLines || undefined,
-                    tailLines: tailLines || undefined
+                    tailLines: tailLines || undefined,
+                    stripSpinner: stripSpinner
                 });
                 let outputText = `Terminal Output (${terminalId}):\n\n${result.output}\n\n--- End of Output ---\n`;
                 outputText += `Total Lines: ${result.totalLines}\n`;
                 outputText += `Has More: ${result.hasMore}\n`;
-                outputText += `Next Read From: ${result.since}`;
+                outputText += `Next Read Cursor: ${result.cursor ?? result.since}`;
                 if (result.truncated) {
                     outputText += `\nTruncated: Yes`;
                 }
@@ -214,6 +226,24 @@ export class PersistentTerminalMcpServer {
                     outputText += `\n- Lines Shown: ${result.stats.linesShown}`;
                     if (result.stats.linesOmitted > 0) {
                         outputText += `\n- Lines Omitted: ${result.stats.linesOmitted}`;
+                    }
+                }
+                if (result.status) {
+                    outputText += `\n\nStatus:`;
+                    outputText += `\n- Running: ${result.status.isRunning}`;
+                    outputText += `\n- Prompt Visible: ${result.status.hasPrompt}`;
+                    outputText += `\n- Last Activity: ${result.status.lastActivity}`;
+                    if (result.status.promptLine) {
+                        outputText += `\n- Prompt: ${result.status.promptLine}`;
+                    }
+                    if (result.status.pendingCommand) {
+                        outputText += `\n- Pending Command: ${result.status.pendingCommand.command} (started ${result.status.pendingCommand.startedAt})`;
+                    }
+                    if (result.status.lastCommand) {
+                        outputText += `\n- Last Command: ${result.status.lastCommand.command}`;
+                        if (result.status.lastCommand.completedAt) {
+                            outputText += ` (completed ${result.status.lastCommand.completedAt})`;
+                        }
                     }
                 }
                 return {
@@ -352,6 +382,38 @@ export class PersistentTerminalMcpServer {
                         {
                             type: 'text',
                             text: `Error getting terminal stats: ${error instanceof Error ? error.message : String(error)}`
+                        }
+                    ],
+                    isError: true
+                };
+            }
+        });
+        // 等待输出稳定工具
+        this.server.tool('wait_for_output', 'Wait for terminal output to stabilize. Useful after running commands to ensure all output is captured.', {
+            terminalId: z.string().describe('Terminal session ID'),
+            timeout: z.number().optional().describe('Maximum time to wait in milliseconds (default: 5000)'),
+            stableTime: z.number().optional().describe('Time with no new output to consider stable in milliseconds (default: 500)')
+        }, {
+            title: 'Wait for Output',
+            readOnlyHint: true
+        }, async ({ terminalId, timeout, stableTime }) => {
+            try {
+                await this.terminalManager.waitForOutputStable(terminalId, timeout || 5000, stableTime || 500);
+                return {
+                    content: [
+                        {
+                            type: 'text',
+                            text: `Output for terminal ${terminalId} has stabilized.`
+                        }
+                    ]
+                };
+            }
+            catch (error) {
+                return {
+                    content: [
+                        {
+                            type: 'text',
+                            text: `Error waiting for output: ${error instanceof Error ? error.message : String(error)}`
                         }
                     ],
                     isError: true
@@ -550,18 +612,28 @@ Would you like specific help with your issue?`
      * 设置事件处理器
      */
     setupEventHandlers() {
-        // 监听终端事件并记录日志
+        // 监听终端事件并记录日志（仅在调试模式下）
+        // 使用 stderr 避免污染 stdio JSON-RPC 通道
+        const debug = process.env.MCP_DEBUG === 'true';
         this.terminalManager.on('terminalCreated', (terminalId, session) => {
-            console.log(`Terminal created: ${terminalId} (PID: ${session.pid})`);
+            if (debug) {
+                process.stderr.write(`[MCP-DEBUG] Terminal created: ${terminalId} (PID: ${session.pid})\n`);
+            }
         });
         this.terminalManager.on('terminalExit', (terminalId, exitCode, signal) => {
-            console.log(`Terminal exited: ${terminalId} (code: ${exitCode}, signal: ${signal})`);
+            if (debug) {
+                process.stderr.write(`[MCP-DEBUG] Terminal exited: ${terminalId} (code: ${exitCode}, signal: ${signal})\n`);
+            }
         });
         this.terminalManager.on('terminalKilled', (terminalId, signal) => {
-            console.log(`Terminal killed: ${terminalId} (signal: ${signal})`);
+            if (debug) {
+                process.stderr.write(`[MCP-DEBUG] Terminal killed: ${terminalId} (signal: ${signal})\n`);
+            }
         });
         this.terminalManager.on('terminalCleaned', (terminalId) => {
-            console.log(`Terminal cleaned up: ${terminalId}`);
+            if (debug) {
+                process.stderr.write(`[MCP-DEBUG] Terminal cleaned up: ${terminalId}\n`);
+            }
         });
     }
     /**
@@ -580,9 +652,13 @@ Would you like specific help with your issue?`
      * 关闭服务器
      */
     async shutdown() {
-        console.log('Shutting down MCP server...');
+        if (process.env.MCP_DEBUG === 'true') {
+            process.stderr.write('[MCP-DEBUG] Shutting down MCP server...\n');
+        }
         await this.terminalManager.shutdown();
-        console.log('MCP server shutdown complete');
+        if (process.env.MCP_DEBUG === 'true') {
+            process.stderr.write('[MCP-DEBUG] MCP server shutdown complete\n');
+        }
     }
 }
 //# sourceMappingURL=mcp-server.js.map

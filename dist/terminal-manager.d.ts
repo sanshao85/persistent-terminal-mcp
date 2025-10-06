@@ -8,7 +8,10 @@ export declare class TerminalManager extends EventEmitter {
     private sessions;
     private ptyProcesses;
     private outputBuffers;
+    private exitPromises;
+    private exitResolvers;
     private config;
+    private cleanupTimer;
     constructor(config?: TerminalManagerConfig);
     /**
      * 创建新的终端会话
@@ -18,6 +21,7 @@ export declare class TerminalManager extends EventEmitter {
      * 向终端写入数据
      */
     writeToTerminal(options: TerminalWriteOptions): Promise<void>;
+    private shouldAutoAppendNewline;
     /**
      * 从终端读取输出
      */
@@ -26,6 +30,16 @@ export declare class TerminalManager extends EventEmitter {
      * 获取终端统计信息
      */
     getTerminalStats(terminalId: string): Promise<TerminalStatsResult>;
+    /**
+     * 检查终端是否正在运行命令
+     * 通过检查最后一次活动时间来判断
+     */
+    isTerminalBusy(terminalId: string): boolean;
+    /**
+     * 等待终端输出稳定
+     * 用于确保命令执行完成后再读取输出
+     */
+    waitForOutputStable(terminalId: string, timeout?: number, stableTime?: number): Promise<void>;
     /**
      * 列出所有终端会话
      */
@@ -50,6 +64,7 @@ export declare class TerminalManager extends EventEmitter {
      * 清理指定会话
      */
     private cleanupSession;
+    private waitForPtyExit;
     /**
      * 清理超时的会话
      */
@@ -67,5 +82,11 @@ export declare class TerminalManager extends EventEmitter {
      * 关闭管理器，清理所有资源
      */
     shutdown(): Promise<void>;
+    private processBufferEntries;
+    private trackCommand;
+    private extractCommandText;
+    private isMostlyPrintable;
+    private isPromptLine;
+    private buildReadStatus;
 }
 //# sourceMappingURL=terminal-manager.d.ts.map

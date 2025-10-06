@@ -4,10 +4,21 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { PersistentTerminalMcpServer } from './mcp-server.js';
 
 /**
+ * 日志输出函数 - 只在调试模式下输出到 stderr
+ * MCP 使用 stdio 进行 JSON-RPC 通信，所以日志必须输出到 stderr
+ */
+function log(message: string) {
+  if (process.env.MCP_DEBUG === 'true') {
+    // 使用 stderr 避免污染 stdio JSON-RPC 通道
+    process.stderr.write(`[MCP-DEBUG] ${message}\n`);
+  }
+}
+
+/**
  * 持久化终端 MCP 服务器主入口
  */
 async function main() {
-  console.error('Starting Persistent Terminal MCP Server...');
+  log('Starting Persistent Terminal MCP Server...');
 
   // 创建 MCP 服务器实例
   const mcpServer = new PersistentTerminalMcpServer();
@@ -19,32 +30,33 @@ async function main() {
   // 连接服务器和传输层
   await server.connect(transport);
 
-  console.error('Persistent Terminal MCP Server started successfully');
-  console.error('Server capabilities:');
-  console.error('- create_terminal: Create new persistent terminal sessions');
-  console.error('- write_terminal: Send input to terminal sessions');
-  console.error('- read_terminal: Read output from terminal sessions');
-  console.error('- list_terminals: List all active terminal sessions');
-  console.error('- kill_terminal: Terminate terminal sessions');
-  console.error('');
-  console.error('Resources available:');
-  console.error('- terminal://list: List of all terminals');
-  console.error('- terminal://output/{terminalId}: Terminal output');
-  console.error('- terminal://stats: Manager statistics');
-  console.error('');
-  console.error('Prompts available:');
-  console.error('- terminal-usage-guide: Usage guide');
-  console.error('- terminal-troubleshooting: Troubleshooting guide');
+  log('Persistent Terminal MCP Server started successfully');
+  log('Server capabilities:');
+  log('- create_terminal: Create new persistent terminal sessions');
+  log('- write_terminal: Send input to terminal sessions');
+  log('- read_terminal: Read output from terminal sessions');
+  log('- list_terminals: List all active terminal sessions');
+  log('- kill_terminal: Terminate terminal sessions');
+  log('');
+  log('Resources available:');
+  log('- terminal://list: List of all terminals');
+  log('- terminal://output/{terminalId}: Terminal output');
+  log('- terminal://stats: Manager statistics');
+  log('');
+  log('Prompts available:');
+  log('- terminal-usage-guide: Usage guide');
+  log('- terminal-troubleshooting: Troubleshooting guide');
 
   // 处理优雅关闭
   const shutdown = async () => {
-    console.error('Received shutdown signal, cleaning up...');
+    log('Received shutdown signal, cleaning up...');
     try {
       await mcpServer.shutdown();
       await transport.close();
       process.exit(0);
     } catch (error) {
-      console.error('Error during shutdown:', error);
+      // 错误信息输出到 stderr，避免污染 stdio
+      process.stderr.write(`[MCP-ERROR] Error during shutdown: ${error}\n`);
       process.exit(1);
     }
   };
@@ -55,12 +67,12 @@ async function main() {
 
   // 处理未捕获的异常
   process.on('uncaughtException', (error) => {
-    console.error('Uncaught exception:', error);
+    process.stderr.write(`[MCP-ERROR] Uncaught exception: ${error}\n`);
     shutdown();
   });
 
   process.on('unhandledRejection', (reason, promise) => {
-    console.error('Unhandled rejection at:', promise, 'reason:', reason);
+    process.stderr.write(`[MCP-ERROR] Unhandled rejection at: ${promise}, reason: ${reason}\n`);
     shutdown();
   });
 }
@@ -68,7 +80,7 @@ async function main() {
 // 启动服务器
 if (import.meta.url === `file://${process.argv[1]}`) {
   main().catch((error) => {
-    console.error('Failed to start server:', error);
+    process.stderr.write(`[MCP-ERROR] Failed to start server: ${error}\n`);
     process.exit(1);
   });
 }
