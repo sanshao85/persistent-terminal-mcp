@@ -37,6 +37,55 @@ npm run test:tools           # 全量验证所有 MCP 工具
 npm run test:fixes           # 针对关键修复的回归测试
 ```
 
+## MCP 客户端配置
+
+### Claude Desktop / Claude Code (macOS / Linux)
+在 MCP 配置文件中添加以下配置：
+
+**Claude Desktop**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+**Claude Code**: 根据客户端要求在相应位置创建或编辑配置文件
+
+```json
+{
+  "mcpServers": {
+    "persistent-terminal": {
+      "command": "node",
+      "args": [
+        "/absolute/path/to/node-pty/dist/index.js"
+      ],
+      "env": {
+        "MAX_BUFFER_SIZE": "10000",
+        "SESSION_TIMEOUT": "86400000"
+      }
+    }
+  }
+}
+```
+
+**重要提示**：请将 `/absolute/path/to/node-pty` 替换为实际的安装目录绝对路径。
+
+### Codex 配置
+对于 Codex，在 `.codex/config.toml` 文件中添加以下配置：
+
+```toml
+# MCP Server Configuration (TOML Format)
+# 用于配置 persistent-terminal MCP 服务器
+
+[mcp_servers.persistent-terminal]
+command = "node"
+args = ["/absolute/path/to/node-pty/dist/index.js"]
+
+[mcp_servers.persistent-terminal.env]
+MAX_BUFFER_SIZE = "10000"
+SESSION_TIMEOUT = "86400000"
+```
+
+**重要提示**：请将 `/absolute/path/to/node-pty` 替换为实际的安装目录绝对路径。
+
+### 环境变量说明
+- `MAX_BUFFER_SIZE`: 缓冲区最大行数（默认：10000）
+- `SESSION_TIMEOUT`: 会话超时时间，单位毫秒（默认：86400000 = 24 小时）
+
 ## MCP 工具一览
 | 工具 | 作用 |
 |------|------|

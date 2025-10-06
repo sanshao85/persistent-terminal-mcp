@@ -47,6 +47,55 @@ npm run test:tools           # exercises every MCP tool end-to-end
 npm run test:fixes           # regression tests for recent bug fixes
 ```
 
+## MCP Client Configuration
+
+### Claude Desktop / Claude Code (macOS / Linux)
+Add the following configuration to your MCP settings file:
+
+**Claude Desktop**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+**Claude Code**: Create or edit the file at the appropriate location for your client
+
+```json
+{
+  "mcpServers": {
+    "persistent-terminal": {
+      "command": "node",
+      "args": [
+        "/absolute/path/to/node-pty/dist/index.js"
+      ],
+      "env": {
+        "MAX_BUFFER_SIZE": "10000",
+        "SESSION_TIMEOUT": "86400000"
+      }
+    }
+  }
+}
+```
+
+**Important**: Replace `/absolute/path/to/node-pty` with the actual absolute path to your installation directory.
+
+### Codex Configuration
+For Codex, add the following to `.codex/config.toml`:
+
+```toml
+# MCP Server Configuration (TOML Format)
+# 用于配置 persistent-terminal MCP 服务器
+
+[mcp_servers.persistent-terminal]
+command = "node"
+args = ["/absolute/path/to/node-pty/dist/index.js"]
+
+[mcp_servers.persistent-terminal.env]
+MAX_BUFFER_SIZE = "10000"
+SESSION_TIMEOUT = "86400000"
+```
+
+**Important**: Replace `/absolute/path/to/node-pty` with the actual absolute path to your installation directory.
+
+### Environment Variables
+- `MAX_BUFFER_SIZE`: Maximum number of lines to keep in buffer (default: 10000)
+- `SESSION_TIMEOUT`: Session timeout in milliseconds (default: 86400000 = 24 hours)
+
 ## MCP Tools
 | Tool | Purpose |
 |------|---------|
