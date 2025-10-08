@@ -1,0 +1,168 @@
+# Persistent Terminal MCP Server
+
+[简体中文](README.md)
+
+Persistent Terminal MCP Server is a TypeScript implementation of a Model Context
+Protocol (MCP) server that keeps terminal sessions alive for AI assistants and
+automation flows. It is built on top of [`node-pty`](https://github.com/microsoft/node-pty)
+so commands continue running even when the requesting client disconnects.
+
+## Highlights
+- **Persistent PTY sessions** – create, reuse, and terminate long-running shells
+- **Smart output buffering** – incremental reads plus head, tail, or head-tail
+  views with token estimates for large logs
+- **Spinner animation compaction** – automatically detects and throttles progress
+  animations (like npm install spinners) to reduce noise and preserve real logs
+- **Full session management** – statistics, listing, kill signals, and automatic
+  cleanup for inactive sessions
+- **MCP-ready** – ships with tools, resources, and prompts compatible with
+  Claude Desktop, Claude Code, and other MCP clients
+- **REST API option** – optional Express server mirrors the MCP functionality
+  for non-MCP integrations
+
+## Quick Start
+```bash
+npm install          # install dependencies
+npm run build        # compile TypeScript → dist/
+npm start            # launch the MCP server over stdio
+```
+
+During development you can run the TypeScript sources directly:
+```bash
+npm run dev          # MCP server (tsx)
+npm run dev:rest     # REST server (tsx)
+```
+
+### Debugging Mode
+To enable debug logging (output to stderr, won't interfere with MCP communication):
+```bash
+MCP_DEBUG=true npm start
+```
+
+### Example Scripts
+```bash
+npm run example:basic        # basic lifecycle (create → write → read → kill)
+npm run example:smart        # demonstrates head/tail/head-tail reading
+npm run test:tools           # exercises every MCP tool end-to-end
+npm run test:fixes           # regression tests for recent bug fixes
+```
+
+## MCP Client Configuration
+
+### Claude Desktop / Claude Code (macOS / Linux)
+Add the following configuration to your MCP settings file:
+
+**Claude Desktop**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+**Claude Code**: Create or edit the file at the appropriate location for your client
+
+```json
+{
+  "mcpServers": {
+    "persistent-terminal": {
+      "command": "node",
+      "args": [
+        "/absolute/path/to/node-pty/dist/index.js"
+      ],
+      "env": {
+        "MAX_BUFFER_SIZE": "10000",
+        "SESSION_TIMEOUT": "86400000"
+      }
+    }
+  }
+}
+```
+
+**Important**: Replace `/absolute/path/to/node-pty` with the actual absolute path to your installation directory.
+
+### Codex Configuration
+For Codex, add the following to `.codex/config.toml`:
+
+```toml
+# MCP Server Configuration (TOML Format)
+# 用于配置 persistent-terminal MCP 服务器
+
+[mcp_servers.persistent-terminal]
+command = "node"
+args = ["/absolute/path/to/node-pty/dist/index.js"]
+
+[mcp_servers.persistent-terminal.env]
+MAX_BUFFER_SIZE = "10000"
+SESSION_TIMEOUT = "86400000"
+```
+
+**Important**: Replace `/absolute/path/to/node-pty` with the actual absolute path to your installation directory.
+
+### Environment Variables
+- `MAX_BUFFER_SIZE`: Maximum number of lines to keep in buffer (default: 10000)
+- `SESSION_TIMEOUT`: Session timeout in milliseconds (default: 86400000 = 24 hours)
+
+## MCP Tools
+| Tool | Purpose |
+|------|---------|
+| `create_terminal` | Create a persistent terminal session (supports `env`, `shell`, and `cwd`) |
+| `create_terminal_basic` | Convenience alias for clients that can only send simple strings |
+| `write_terminal` | Send input to a terminal; newline is added automatically if needed |
+| `read_terminal` | Retrieve buffered output with smart truncation options |
+| `wait_for_output` | Wait for terminal output to stabilize (useful after running commands) |
+| `get_terminal_stats` | Inspect buffer size, line counts, estimated tokens, and activity |
+| `list_terminals` | Enumerate active sessions and their metadata |
+| `kill_terminal` | Terminate a session with an optional signal |
+
+Additional MCP resources and prompts are exposed for listing sessions, viewing
+output, and surfacing troubleshooting tips inside compatible clients.
+
+## REST API (Optional)
+If you prefer HTTP, start the REST variant:
+```bash
+npm run start:rest
+```
+The server listens on port `3001` (configurable) and mirrors the MCP toolset.
+Endpoints include `/api/terminals`, `/api/terminals/:id/input`, `/api/terminals/:id/output`,
+`/api/terminals/:id/stats`, `/api/terminals`, and `/api/terminals/:id`.
+
+## Project Layout
+```
+docs/                → Consolidated documentation index
+  ├── guides/        → Usage guides and tutorials
+  ├── reference/     → Technical references and fixes
+  │   └── fixes/     → All fix documentation
+  ├── clients/       → Client-specific setup
+  └── zh/            → Chinese documentation
+scripts/             → Helper scripts for local debugging
+src/                 → TypeScript source code
+  ├── __tests__/     → Unit tests
+  └── examples/      → Example scripts
+tests/               → Test suites
+  └── integration/   → Integration tests
+dist/                → Compiled JavaScript output
+```
+
+### Documentation Map
+All documentation is organized under [`docs/`](docs/README.md):
+
+**Quick Access:**
+- 📖 [Documentation Index](docs/README.md) – Complete documentation map
+- 🚨 [Fixes Index](docs/reference/fixes/README.md) – All fixes and solutions
+- 🧪 [Integration Tests](tests/integration/README.md) – Test suite
+
+**By Category:**
+- **Guides**: Usage, troubleshooting, MCP configuration
+- **Reference**: Technical details, tools summary, bug fixes
+- **Fixes**: Stdio fix, Cursor fix, terminal fixes
+- **Clients**: Claude Desktop / Claude Code setup
+- **中文**: Chinese-language documentation
+
+### Important Notes
+- **Stdio Purity**: This MCP server follows the MCP protocol strictly by ensuring stdout only contains JSON-RPC messages. All logging goes to stderr. See [docs/reference/fixes/STDIO_FIX.md](docs/reference/fixes/STDIO_FIX.md) for details.
+- **Cursor Compatibility**: Fully compatible with Cursor and other strict MCP clients that require clean JSON-RPC communication. See [docs/reference/fixes/QUICK_FIX_GUIDE.md](docs/reference/fixes/QUICK_FIX_GUIDE.md) for quick setup.
+- **Terminal Interaction**: Supports interactive applications (vim, npm create, etc.) with proper ANSI escape sequence handling. See [docs/reference/fixes/TERMINAL_FIXES.md](docs/reference/fixes/TERMINAL_FIXES.md) for details.
+- **Output Stability**: Use `wait_for_output` tool to ensure complete output capture after running commands.
+
+## Contributing
+Contributions are welcome! Please open an issue or pull request if you
+encounter bugs or have ideas for new capabilities. The
+[`CONTRIBUTING.md`](CONTRIBUTING.md) file outlines the recommended workflow and
+coding standards.
+
+## License
+This project is released under the [MIT License](LICENSE).
