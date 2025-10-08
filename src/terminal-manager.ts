@@ -199,7 +199,9 @@ export class TerminalManager extends EventEmitter {
       // 这样用户可以直接发送 "ls" 而不需要手动添加 "\n"
       const autoAppend = appendNewline ?? this.shouldAutoAppendNewline(input);
       const needsNewline = autoAppend && !input.endsWith('\n') && !input.endsWith('\r');
-      const inputToWrite = needsNewline ? input + '\n' : input;
+      const newlineChar = '\r';
+      const inputWithAutoNewline = needsNewline ? input + newlineChar : input;
+      const inputToWrite = this.normalizeNewlines(inputWithAutoNewline);
 
       // 写入数据到 PTY
       // node-pty 的 write 方法是同步的，但我们需要确保数据被发送
@@ -236,6 +238,17 @@ export class TerminalManager extends EventEmitter {
       terminalError.terminalId = terminalId;
       throw terminalError;
     }
+  }
+
+  private normalizeNewlines(value: string): string {
+    if (!value) {
+      return value;
+    }
+
+    // Normalize CRLF to CR first, then convert bare LF to CR so Enter behaves like a real TTY
+    return value
+      .replace(/\r\n/g, '\r')
+      .replace(/\n/g, '\r');
   }
 
   private shouldAutoAppendNewline(input: string): boolean {

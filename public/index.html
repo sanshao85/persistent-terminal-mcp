@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Terminal Manager</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <h1>🖥️ Terminal Manager</h1>
+      <div class="header-actions">
+        <button id="refresh-btn" class="btn btn-secondary">🔄 Refresh</button>
+        <button id="create-terminal-btn" class="btn btn-primary">+ New Terminal</button>
+      </div>
+    </header>
+
+    <div id="stats" class="stats">
+      <div class="stat-item">
+        <span class="stat-label">Total Terminals:</span>
+        <span id="total-count" class="stat-value">0</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">Active:</span>
+        <span id="active-count" class="stat-value">0</span>
+      </div>
+    </div>
+
+    <div id="terminal-list" class="terminal-list">
+      <!-- Terminal cards will be inserted here -->
+    </div>
+
+    <div id="empty-state" class="empty-state">
+      <p>No terminals yet. Create one to get started!</p>
+    </div>
+  </div>
+
+  <!-- Create Terminal Modal -->
+  <div id="create-modal" class="modal">
+    <div class="modal-content">
+      <h2>Create New Terminal</h2>
+      <form id="create-form">
+        <div class="form-group">
+          <label for="shell">Shell (optional):</label>
+          <input type="text" id="shell" placeholder="e.g., /bin/bash">
+        </div>
+        <div class="form-group">
+          <label for="cwd">Working Directory (optional):</label>
+          <input type="text" id="cwd" placeholder="e.g., /home/user">
+        </div>
+        <div class="form-actions">
+          <button type="button" id="cancel-btn" class="btn btn-secondary">Cancel</button>
+          <button type="submit" class="btn btn-primary">Create</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="app.js?v=2"></script>
+</body>
+</html>
+

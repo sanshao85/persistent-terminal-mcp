@@ -21,6 +21,7 @@ export declare class TerminalManager extends EventEmitter {
      * 向终端写入数据
      */
     writeToTerminal(options: TerminalWriteOptions): Promise<void>;
+    private normalizeNewlines;
     private shouldAutoAppendNewline;
     /**
      * 从终端读取输出

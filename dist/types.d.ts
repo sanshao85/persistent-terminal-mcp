@@ -172,4 +172,15 @@ export interface KillTerminalResult {
     success: boolean;
     message?: string;
 }
+export interface WebUIStartOptions {
+    port?: number;
+    autoOpen?: boolean;
+    terminalManager: any;
+}
+export interface WebUIStartResult {
+    url: string;
+    port: number;
+    mode: 'new' | 'existing';
+    autoOpened: boolean;
+}
 //# sourceMappingURL=types.d.ts.map

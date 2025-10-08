@@ -287,7 +287,10 @@ export class OutputBuffer extends EventEmitter {
         case 'G':
         case 'D':
         case 'C': {
-          const line = this.touchCurrentLine(newEntries, true);
+          // When we receive erase/move sequences after a newline, ensure we
+          // operate on the current (possibly new) line instead of mutating the
+          // previously finalized entry.
+          const line = this.touchCurrentLine(newEntries);
           if (line) {
             line.content = '';
             markUpdated(line);

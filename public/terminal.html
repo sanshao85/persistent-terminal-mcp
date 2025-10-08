@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Terminal</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="terminal-page">
+    <header class="terminal-header">
+      <div class="terminal-info">
+        <a href="/" class="back-link">← Back to List</a>
+        <h2 id="terminal-title">Terminal</h2>
+        <span id="terminal-status" class="status-badge">Loading...</span>
+      </div>
+      <div class="terminal-actions">
+        <button id="clear-btn" class="btn btn-secondary">Clear</button>
+        <button id="kill-btn" class="btn btn-danger">Kill Terminal</button>
+      </div>
+    </header>
+
+    <div class="terminal-details">
+      <div class="detail-item">
+        <span class="detail-label">PID:</span>
+        <span id="detail-pid">-</span>
+      </div>
+      <div class="detail-item">
+        <span class="detail-label">Shell:</span>
+        <span id="detail-shell">-</span>
+      </div>
+      <div class="detail-item">
+        <span class="detail-label">CWD:</span>
+        <span id="detail-cwd">-</span>
+      </div>
+      <div class="detail-item">
+        <span class="detail-label">Created:</span>
+        <span id="detail-created">-</span>
+      </div>
+    </div>
+
+    <div id="terminal-container"></div>
+
+    <div class="input-container">
+      <input type="text" id="command-input" placeholder="Type command and press Enter...">
+      <button id="send-btn" class="btn btn-primary">Send</button>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
+  <script src="/terminal.js?v=3"></script>
+</body>
+</html>
+

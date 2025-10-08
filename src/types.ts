@@ -197,3 +197,17 @@ export interface KillTerminalResult {
   success: boolean;
   message?: string;
 }
+
+// Web UI 相关类型
+export interface WebUIStartOptions {
+  port?: number;
+  autoOpen?: boolean;
+  terminalManager: any; // TerminalManager 类型
+}
+
+export interface WebUIStartResult {
+  url: string;
+  port: number;
+  mode: 'new' | 'existing';
+  autoOpened: boolean;
+}

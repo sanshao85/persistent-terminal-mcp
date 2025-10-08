@@ -98,6 +98,32 @@ describe('Spinner Detection and Compaction', () => {
       });
     });
 
+    test('should preserve npm install style summaries', () => {
+      buffer.append('bash-3.2$ npm install\n');
+      buffer.append('up to date, audited 123 packages in 5s\n');
+      buffer.append('\u001b[1G\u001b[0K⠙');
+      buffer.append('\u001b[1G\u001b[0K');
+      buffer.append('58 packages are looking for funding\n');
+      buffer.append('  run `npm fund` for details\n');
+      buffer.append('\u001b[1G\u001b[0K');
+      buffer.append('found 0 vulnerabilities\n');
+      buffer.append('\u001b[1G\u001b[0K⠙');
+
+      return new Promise<void>((resolve) => {
+        setTimeout(() => {
+          const result = buffer.read();
+          const contents = result.entries.map(e => e.content);
+
+          expect(contents).toContain('up to date, audited 123 packages in 5s');
+          expect(contents).toContain('58 packages are looking for funding');
+          expect(contents).toContain('  run `npm fund` for details');
+          expect(contents).toContain('found 0 vulnerabilities');
+
+          resolve();
+        }, 120);
+      });
+    });
+
     test('should handle ANSI escape sequences with spinners', () => {
       // Simulate colored spinner output
       buffer.append('[33m⠋[0m Installing\r');
@@ -260,4 +286,3 @@ describe('Spinner Detection and Compaction', () => {
     });
   });
 });
-

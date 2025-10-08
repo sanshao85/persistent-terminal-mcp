@@ -137,7 +137,65 @@ describe('TerminalManager', () => {
         input: 'npm --version'
       });
 
-      expect(fakeWrite).toHaveBeenCalledWith('npm --version\n');
+      expect(fakeWrite).toHaveBeenCalledWith('npm --version\r');
+
+      (terminalManager as any).ptyProcesses.delete(fakeId);
+      (terminalManager as any).sessions.delete(fakeId);
+    });
+
+    test('should send carriage return when only newline requested', async () => {
+      const fakeId = 'enter-terminal';
+      const fakeWrite = jest.fn();
+      const fakeSession = {
+        id: fakeId,
+        pid: 22347,
+        shell: '/bin/bash',
+        cwd: process.cwd(),
+        env: {} as Record<string, string>,
+        created: new Date(),
+        lastActivity: new Date(),
+        status: 'active' as const
+      };
+
+      (terminalManager as any).ptyProcesses.set(fakeId, { write: fakeWrite });
+      (terminalManager as any).sessions.set(fakeId, fakeSession);
+
+      await terminalManager.writeToTerminal({
+        terminalId: fakeId,
+        input: '',
+        appendNewline: true
+      });
+
+      expect(fakeWrite).toHaveBeenCalledWith('\r');
+
+      (terminalManager as any).ptyProcesses.delete(fakeId);
+      (terminalManager as any).sessions.delete(fakeId);
+    });
+
+    test('should normalize explicit newline input to carriage return', async () => {
+      const fakeId = 'normalize-terminal';
+      const fakeWrite = jest.fn();
+      const fakeSession = {
+        id: fakeId,
+        pid: 22348,
+        shell: '/bin/bash',
+        cwd: process.cwd(),
+        env: {} as Record<string, string>,
+        created: new Date(),
+        lastActivity: new Date(),
+        status: 'active' as const
+      };
+
+      (terminalManager as any).ptyProcesses.set(fakeId, { write: fakeWrite });
+      (terminalManager as any).sessions.set(fakeId, fakeSession);
+
+      await terminalManager.writeToTerminal({
+        terminalId: fakeId,
+        input: '\n',
+        appendNewline: false
+      });
+
+      expect(fakeWrite).toHaveBeenCalledWith('\r');
 
       (terminalManager as any).ptyProcesses.delete(fakeId);
       (terminalManager as any).sessions.delete(fakeId);

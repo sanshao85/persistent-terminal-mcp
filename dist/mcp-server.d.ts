@@ -7,6 +7,7 @@ import { TerminalManager } from './terminal-manager.js';
 export declare class PersistentTerminalMcpServer {
     private server;
     private terminalManager;
+    private webUiManager;
     constructor();
     /**
      * 创建终端并返回统一格式的结果

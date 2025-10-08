@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>API Test</title>
+  <style>
+    body {
+      font-family: monospace;
+      padding: 20px;
+      background: #1e1e1e;
+      color: #d4d4d4;
+    }
+    pre {
+      background: #000;
+      padding: 10px;
+      border-radius: 4px;
+      overflow-x: auto;
+    }
+    button {
+      padding: 10px 20px;
+      margin: 5px;
+      background: #0e639c;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #1177bb;
+    }
+  </style>
+</head>
+<body>
+  <h1>API Test Page</h1>
+  
+  <div>
+    <button onclick="testListTerminals()">Test: List Terminals</button>
+    <button onclick="testGetTerminal()">Test: Get Terminal</button>
+    <button onclick="testGetOutput()">Test: Get Output</button>
+  </div>
+  
+  <h2>Results:</h2>
+  <pre id="results">Click a button to test...</pre>
+  
+  <script>
+    async function testListTerminals() {
+      try {
+        const response = await fetch('/api/terminals');
+        const data = await response.json();
+        document.getElementById('results').textContent = JSON.stringify(data, null, 2);
+      } catch (error) {
+        document.getElementById('results').textContent = 'Error: ' + error.message;
+      }
+    }
+    
+    async function testGetTerminal() {
+      try {
+        // First get the list to find a terminal ID
+        const listResponse = await fetch('/api/terminals');
+        const listData = await listResponse.json();
+        
+        if (listData.terminals && listData.terminals.length > 0) {
+          const terminalId = listData.terminals[0].id;
+          const response = await fetch(`/api/terminals/${terminalId}`);
+          const data = await response.json();
+          document.getElementById('results').textContent = JSON.stringify(data, null, 2);
+        } else {
+          document.getElementById('results').textContent = 'No terminals found';
+        }
+      } catch (error) {
+        document.getElementById('results').textContent = 'Error: ' + error.message;
+      }
+    }
+    
+    async function testGetOutput() {
+      try {
+        // First get the list to find a terminal ID
+        const listResponse = await fetch('/api/terminals');
+        const listData = await listResponse.json();
+        
+        if (listData.terminals && listData.terminals.length > 0) {
+          const terminalId = listData.terminals[0].id;
+          const response = await fetch(`/api/terminals/${terminalId}/output`);
+          const data = await response.json();
+          document.getElementById('results').textContent = JSON.stringify(data, null, 2);
+        } else {
+          document.getElementById('results').textContent = 'No terminals found';
+        }
+      } catch (error) {
+        document.getElementById('results').textContent = 'Error: ' + error.message;
+      }
+    }
+  </script>
+</body>
+</html>
+

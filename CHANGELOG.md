@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **🌐 Web UI 管理界面**: 基于浏览器的可视化终端管理界面
+  - 使用 xterm.js 渲染终端输出，支持完整 ANSI 颜色
+  - WebSocket 实时推送，终端输出实时显示
+  - 直接在浏览器中发送命令、查看输出
+  - 自动端口分配，支持多实例运行
+  - VS Code 风格的暗色主题界面
+  - 新增 `open_terminal_ui` MCP 工具
+  - 新增 `WebUIManager` 和 `WebUIServer` 模块
+  - 新增 Web UI 静态文件（public/）
+  - 新增 Web UI 使用指南文档
+- **📚 文档更新**: 全面更新中文 README，包含所有新功能说明
+
+### Changed
+- 更新 README.zh-CN.md，采用更清晰的结构和更详细的功能说明
+- 优化文档导航，添加更多 emoji 图标提升可读性
+
 ### Fixed
 
 #### 🔴 Critical: Terminal command execution and interaction issues

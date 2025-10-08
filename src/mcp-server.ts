@@ -7,6 +7,7 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { TerminalManager } from './terminal-manager.js';
+import { WebUIManager } from './web-ui-manager.js';
 import {
   CreateTerminalInput,
   CreateTerminalResult,
@@ -28,6 +29,7 @@ import {
 export class PersistentTerminalMcpServer {
   private server: McpServer;
   private terminalManager: TerminalManager;
+  private webUiManager: WebUIManager;
 
   constructor() {
     // 创建 MCP 服务器
@@ -61,6 +63,9 @@ export class PersistentTerminalMcpServer {
       compactAnimations: process.env.COMPACT_ANIMATIONS !== 'false', // Default true
       animationThrottleMs: parseInt(process.env.ANIMATION_THROTTLE_MS || '100')
     });
+
+    // 创建 Web UI 管理器
+    this.webUiManager = new WebUIManager();
 
     this.setupTools();
     this.setupResources();
@@ -526,6 +531,63 @@ export class PersistentTerminalMcpServer {
         }
       }
     );
+
+    // 打开终端管理 UI 工具
+    this.server.tool(
+      'open_terminal_ui',
+      'Open a web-based terminal management UI in the browser. This provides a visual interface to manage all terminal sessions.',
+      {
+        port: z.number().optional().describe('Port for the web server (default: auto-detect from 3002)'),
+        autoOpen: z.boolean().optional().describe('Automatically open browser (default: true)')
+      },
+      {
+        title: 'Open Terminal UI',
+        readOnlyHint: true
+      },
+      async ({ port, autoOpen }): Promise<CallToolResult> => {
+        try {
+          const startOptions: any = {
+            autoOpen: autoOpen !== false,
+            terminalManager: this.terminalManager
+          };
+          if (port !== undefined) {
+            startOptions.port = port;
+          }
+          const result = await this.webUiManager.start(startOptions);
+
+          const lines = [
+            'Terminal UI started successfully!',
+            '',
+            `🌐 URL: ${result.url}`,
+            `📡 Port: ${result.port}`,
+            `📊 Mode: ${result.mode}`,
+            '',
+            result.autoOpened
+              ? '✓ Browser opened automatically'
+              : '→ Please open the URL in your browser manually'
+          ];
+
+          return {
+            content: [
+              {
+                type: 'text',
+                text: lines.join('\n')
+              }
+            ]
+          };
+        } catch (error) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `Error starting terminal UI: ${error instanceof Error ? error.message : String(error)}`
+              }
+            ],
+            isError: true
+          };
+        }
+      }
+    );
   }
 
   /**
@@ -797,6 +859,10 @@ Would you like specific help with your issue?`
     if (process.env.MCP_DEBUG === 'true') {
       process.stderr.write('[MCP-DEBUG] Shutting down MCP server...\n');
     }
+
+    // 关闭 Web UI
+    await this.webUiManager.stop();
+
     await this.terminalManager.shutdown();
     if (process.env.MCP_DEBUG === 'true') {
       process.stderr.write('[MCP-DEBUG] MCP server shutdown complete\n');
