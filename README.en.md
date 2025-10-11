@@ -49,11 +49,10 @@ npm run test:fixes           # regression tests for recent bug fixes
 
 ## MCP Client Configuration
 
-### Claude Desktop / Claude Code (macOS / Linux)
+### Claude Desktop (macOS / Linux)
 Add the following configuration to your MCP settings file:
 
-**Claude Desktop**: `~/Library/Application Support/Claude/claude_desktop_config.json`
-**Claude Code**: Create or edit the file at the appropriate location for your client
+**Configuration file location**: `~/Library/Application Support/Claude/claude_desktop_config.json`
 
 ```json
 {
@@ -65,7 +64,9 @@ Add the following configuration to your MCP settings file:
       ],
       "env": {
         "MAX_BUFFER_SIZE": "10000",
-        "SESSION_TIMEOUT": "86400000"
+        "SESSION_TIMEOUT": "86400000",
+        "COMPACT_ANIMATIONS": "true",
+        "ANIMATION_THROTTLE_MS": "100"
       }
     }
   }
@@ -74,12 +75,39 @@ Add the following configuration to your MCP settings file:
 
 **Important**: Replace `/absolute/path/to/node-pty` with the actual absolute path to your installation directory.
 
+### Claude Code (CLI Method)
+Use the command line to quickly add the MCP server:
+
+```bash
+claude mcp add persistent-terminal \
+  --env MAX_BUFFER_SIZE=10000 \
+  --env SESSION_TIMEOUT=86400000 \
+  --env COMPACT_ANIMATIONS=true \
+  --env ANIMATION_THROTTLE_MS=100 \
+  -- node /absolute/path/to/node-pty/dist/index.js
+```
+
+**Important**: Replace `/absolute/path/to/node-pty` with the actual absolute path to your installation directory.
+
+**Example** (assuming project is at `/Users/admin/Desktop/node-pty`):
+```bash
+claude mcp add persistent-terminal \
+  --env MAX_BUFFER_SIZE=10000 \
+  --env SESSION_TIMEOUT=86400000 \
+  --env COMPACT_ANIMATIONS=true \
+  --env ANIMATION_THROTTLE_MS=100 \
+  -- node /Users/admin/Desktop/node-pty/dist/index.js
+```
+
+### Cursor / Cline Configuration
+Configuration is similar to Claude Desktop. Please refer to the MCP configuration documentation for each client.
+
 ### Codex Configuration
 For Codex, add the following to `.codex/config.toml`:
 
 ```toml
 # MCP Server Configuration (TOML Format)
-# 用于配置 persistent-terminal MCP 服务器
+# For configuring persistent-terminal MCP server
 
 [mcp_servers.persistent-terminal]
 command = "node"
@@ -88,13 +116,20 @@ args = ["/absolute/path/to/node-pty/dist/index.js"]
 [mcp_servers.persistent-terminal.env]
 MAX_BUFFER_SIZE = "10000"
 SESSION_TIMEOUT = "86400000"
+COMPACT_ANIMATIONS = "true"
+ANIMATION_THROTTLE_MS = "100"
 ```
 
 **Important**: Replace `/absolute/path/to/node-pty` with the actual absolute path to your installation directory.
 
 ### Environment Variables
-- `MAX_BUFFER_SIZE`: Maximum number of lines to keep in buffer (default: 10000)
-- `SESSION_TIMEOUT`: Session timeout in milliseconds (default: 86400000 = 24 hours)
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `MAX_BUFFER_SIZE` | Maximum number of lines to keep in buffer | 10000 |
+| `SESSION_TIMEOUT` | Session timeout in milliseconds | 86400000 (24 hours) |
+| `COMPACT_ANIMATIONS` | Enable spinner animation compaction | true |
+| `ANIMATION_THROTTLE_MS` | Animation throttle time in milliseconds | 100 |
+| `MCP_DEBUG` | Enable debug logging | false |
 
 ## MCP Tools
 | Tool | Purpose |

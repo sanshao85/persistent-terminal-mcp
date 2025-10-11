@@ -80,11 +80,10 @@ npm run test:fixes           # 关键修复的回归测试
 
 ## ⚙️ MCP 客户端配置
 
-### Claude Desktop / Claude Code (macOS / Linux)
+### Claude Desktop (macOS / Linux)
 在 MCP 配置文件中添加以下配置：
 
-**Claude Desktop**: `~/Library/Application Support/Claude/claude_desktop_config.json`  
-**Claude Code**: 根据客户端要求在相应位置创建或编辑配置文件
+**配置文件位置**: `~/Library/Application Support/Claude/claude_desktop_config.json`
 
 ```json
 {
@@ -106,6 +105,30 @@ npm run test:fixes           # 关键修复的回归测试
 ```
 
 **重要提示**：请将 `/absolute/path/to/node-pty` 替换为实际的安装目录绝对路径。
+
+### Claude Code (CLI 方式)
+使用命令行快速添加 MCP 服务器：
+
+```bash
+claude mcp add persistent-terminal \
+  --env MAX_BUFFER_SIZE=10000 \
+  --env SESSION_TIMEOUT=86400000 \
+  --env COMPACT_ANIMATIONS=true \
+  --env ANIMATION_THROTTLE_MS=100 \
+  -- node /absolute/path/to/node-pty/dist/index.js
+```
+
+**重要提示**：请将 `/absolute/path/to/node-pty` 替换为实际的安装目录绝对路径。
+
+**示例**（假设项目在 `/Users/admin/Desktop/node-pty`）：
+```bash
+claude mcp add persistent-terminal \
+  --env MAX_BUFFER_SIZE=10000 \
+  --env SESSION_TIMEOUT=86400000 \
+  --env COMPACT_ANIMATIONS=true \
+  --env ANIMATION_THROTTLE_MS=100 \
+  -- node /Users/admin/Desktop/node-pty/dist/index.js
+```
 
 ### Cursor / Cline 配置
 配置方式与 Claude Desktop 类似，请参考各客户端的 MCP 配置文档。
