@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { PersistentTerminalMcpServer } from './mcp-server.js';
+import { isMainModule } from './utils/module-helpers.js';
+import { isConptySuppressed } from './utils/error-flags.js';
 /**
  * 日志输出函数 - 只在调试模式下输出到 stderr
  * MCP 使用 stdio 进行 JSON-RPC 通信，所以日志必须输出到 stderr
@@ -58,16 +60,22 @@ async function main() {
     process.on('SIGHUP', shutdown);
     // 处理未捕获的异常
     process.on('uncaughtException', (error) => {
+        if (isConptySuppressed(error)) {
+            return;
+        }
         process.stderr.write(`[MCP-ERROR] Uncaught exception: ${error}\n`);
         shutdown();
     });
     process.on('unhandledRejection', (reason, promise) => {
+        if (isConptySuppressed(reason)) {
+            return;
+        }
         process.stderr.write(`[MCP-ERROR] Unhandled rejection at: ${promise}, reason: ${reason}\n`);
         shutdown();
     });
 }
 // 启动服务器
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isMainModule(import.meta.url)) {
     main().catch((error) => {
         process.stderr.write(`[MCP-ERROR] Failed to start server: ${error}\n`);
         process.exit(1);

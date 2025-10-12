@@ -10,6 +10,7 @@
  */
 import { TerminalManager } from '../terminal-manager.js';
 import { WebUIManager } from '../web-ui-manager.js';
+const defaultShell = process.platform === 'win32' ? 'powershell.exe' : '/bin/bash';
 async function main() {
     console.log('🧪 Testing Web UI Feature...\n');
     // Create terminal manager
@@ -22,12 +23,12 @@ async function main() {
     // Create some test terminals
     console.log('2️⃣  Creating test terminals...');
     const terminal1 = await terminalManager.createTerminal({
-        shell: '/bin/bash',
+        shell: defaultShell,
         cwd: process.cwd()
     });
     console.log(`✅ Terminal 1 created: ${terminal1}`);
     const terminal2 = await terminalManager.createTerminal({
-        shell: '/bin/bash',
+        shell: defaultShell,
         cwd: process.cwd()
     });
     console.log(`✅ Terminal 2 created: ${terminal2}`);

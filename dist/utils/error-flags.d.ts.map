@@ -1,0 +1,1 @@
+{"version":3,"file":"error-flags.d.ts","sourceRoot":"","sources":["../../src/utils/error-flags.ts"],"names":[],"mappings":"AAAA,eAAO,MAAM,oBAAoB,0BAA0B,CAAC;AAE5D,wBAAgB,oBAAoB,CAAC,KAAK,EAAE,GAAG,GAAG,IAAI,CAIrD;AAED,wBAAgB,kBAAkB,CAAC,KAAK,EAAE,OAAO,GAAG,OAAO,CAK1D;AAED,wBAAgB,oBAAoB,CAAC,KAAK,EAAE,GAAG,GAAG,OAAO,CAUxD"}

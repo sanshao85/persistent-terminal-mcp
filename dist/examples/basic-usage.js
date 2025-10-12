@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { TerminalManager } from '../terminal-manager.js';
+import { isMainModule } from '../utils/module-helpers.js';
 /**
  * 基本使用示例
  * 演示如何创建、使用和管理终端会话
@@ -15,7 +16,7 @@ async function basicUsageExample() {
         // 1. 创建终端会话
         console.log('1. Creating a new terminal session...');
         const terminalId = await terminalManager.createTerminal({
-            shell: process.platform === 'win32' ? 'cmd.exe' : '/bin/bash',
+            shell: process.platform === 'win32' ? 'powershell.exe' : '/bin/bash',
             cwd: process.cwd()
         });
         console.log(`   Terminal created with ID: ${terminalId}\n`);
@@ -110,7 +111,7 @@ async function basicUsageExample() {
     }
 }
 // 运行示例
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isMainModule(import.meta.url)) {
     basicUsageExample().catch(console.error);
 }
 //# sourceMappingURL=basic-usage.js.map

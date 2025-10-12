@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { TerminalManager } from '../terminal-manager.js';
 import * as readline from 'readline';
+import { isMainModule } from '../utils/module-helpers.js';
 /**
  * 交互式演示
  * 允许用户通过命令行界面与终端会话交互
@@ -223,7 +224,7 @@ class InteractiveDemo {
     }
 }
 // 运行交互式演示
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isMainModule(import.meta.url)) {
     const demo = new InteractiveDemo();
     demo.start().catch(console.error);
     // 处理 Ctrl+C
