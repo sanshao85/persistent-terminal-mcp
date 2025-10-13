@@ -12,6 +12,7 @@ export declare class TerminalManager extends EventEmitter {
     private exitResolvers;
     private config;
     private cleanupTimer;
+    private readonly isWindows;
     constructor(config?: TerminalManagerConfig);
     /**
      * 创建新的终端会话
@@ -22,6 +23,7 @@ export declare class TerminalManager extends EventEmitter {
      */
     writeToTerminal(options: TerminalWriteOptions): Promise<void>;
     private normalizeNewlines;
+    private getDefaultShellArgs;
     private shouldAutoAppendNewline;
     /**
      * 从终端读取输出
@@ -88,6 +90,7 @@ export declare class TerminalManager extends EventEmitter {
     private extractCommandText;
     private isMostlyPrintable;
     private isPromptLine;
+    private isInteractivePromptLine;
     private buildReadStatus;
 }
 //# sourceMappingURL=terminal-manager.d.ts.map

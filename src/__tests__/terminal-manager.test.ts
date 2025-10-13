@@ -1,7 +1,10 @@
 import { TerminalManager } from '../terminal-manager.js';
 import { OutputBuffer } from '../output-buffer.js';
 
-describe('TerminalManager', () => {
+const describePty = process.platform === 'win32' ? describe.skip : describe;
+const TEST_SHELL = process.platform === 'win32' ? 'powershell.exe' : '/bin/bash';
+
+describePty('TerminalManager', () => {
   let terminalManager: TerminalManager;
 
   beforeEach(() => {
@@ -64,7 +67,7 @@ describe('TerminalManager', () => {
       const fakeSession = {
         id: fakeId,
         pid: 12345,
-        shell: '/bin/bash',
+        shell: TEST_SHELL,
         cwd: process.cwd(),
         env: {} as Record<string, string>,
         created: new Date(),
@@ -93,7 +96,7 @@ describe('TerminalManager', () => {
       const fakeSession = {
         id: fakeId,
         pid: 12346,
-        shell: '/bin/bash',
+        shell: TEST_SHELL,
         cwd: process.cwd(),
         env: {} as Record<string, string>,
         created: new Date(),
@@ -121,7 +124,7 @@ describe('TerminalManager', () => {
       const fakeSession = {
         id: fakeId,
         pid: 12347,
-        shell: '/bin/bash',
+        shell: TEST_SHELL,
         cwd: process.cwd(),
         env: {} as Record<string, string>,
         created: new Date(),
@@ -149,7 +152,7 @@ describe('TerminalManager', () => {
       const fakeSession = {
         id: fakeId,
         pid: 22347,
-        shell: '/bin/bash',
+        shell: TEST_SHELL,
         cwd: process.cwd(),
         env: {} as Record<string, string>,
         created: new Date(),
@@ -178,7 +181,7 @@ describe('TerminalManager', () => {
       const fakeSession = {
         id: fakeId,
         pid: 22348,
-        shell: '/bin/bash',
+        shell: TEST_SHELL,
         cwd: process.cwd(),
         env: {} as Record<string, string>,
         created: new Date(),

@@ -2,6 +2,25 @@ import { spawn } from 'node-pty';
 import { EventEmitter } from 'events';
 import { v4 as uuidv4 } from 'uuid';
 import { OutputBuffer } from './output-buffer.js';
+import { isWindowsConptyEpipe, markConptySuppressed } from './utils/error-flags.js';
+let conptyHandlerRegistered = false;
+if (process.platform === 'win32' && !conptyHandlerRegistered) {
+    conptyHandlerRegistered = true;
+    const handler = (error) => {
+        if (isWindowsConptyEpipe(error)) {
+            markConptySuppressed(error);
+            if (process.env.MCP_DEBUG === 'true') {
+                process.stderr.write('[MCP-DEBUG] Suppressed Windows ConPTY EPIPE error\n');
+            }
+            return;
+        }
+        process.removeListener('uncaughtException', handler);
+        process.nextTick(() => {
+            throw error;
+        });
+    };
+    process.prependListener('uncaughtException', handler);
+}
 /**
  * 终端会话管理器
  * 负责创建、管理和维护持久化的终端会话
@@ -14,15 +33,17 @@ export class TerminalManager extends EventEmitter {
     exitResolvers = new Map();
     config;
     cleanupTimer;
+    isWindows;
     constructor(config = {}) {
         super();
+        this.isWindows = process.platform === 'win32';
         this.config = {
             maxBufferSize: config.maxBufferSize || 10000,
             sessionTimeout: config.sessionTimeout || 24 * 60 * 60 * 1000, // 24 hours
-            defaultShell: config.defaultShell || (process.platform === 'win32' ? 'powershell.exe' : '/bin/bash'),
+            defaultShell: config.defaultShell || (this.isWindows ? 'powershell.exe' : '/bin/bash'),
             defaultCols: config.defaultCols || 80,
             defaultRows: config.defaultRows || 24,
-            compactAnimations: config.compactAnimations ?? true,
+            compactAnimations: config.compactAnimations ?? !this.isWindows,
             animationThrottleMs: config.animationThrottleMs || 100
         };
         // 定期清理超时的会话
@@ -38,25 +59,36 @@ export class TerminalManager extends EventEmitter {
         const terminalId = uuidv4();
         const { shell = this.config.defaultShell, cwd = process.cwd(), env = { ...process.env }, cols = this.config.defaultCols, rows = this.config.defaultRows } = options;
         try {
-            // 确保环境变量中包含 TERM，这对交互式应用很重要
-            const ptyEnv = {
-                ...env,
-                TERM: env.TERM || 'xterm-256color',
-                // 确保 LANG 设置正确，避免编码问题
-                LANG: env.LANG || 'en_US.UTF-8',
-                // 禁用一些可能干扰输出的环境变量
-                PAGER: env.PAGER || 'cat',
-            };
-            // 创建 PTY 进程
-            const ptyProcess = spawn(shell, [], {
-                name: 'xterm-256color', // 修复：使用正确的终端类型
+            const ptyEnv = {};
+            for (const [key, value] of Object.entries(env)) {
+                if (typeof value === 'string') {
+                    ptyEnv[key] = value;
+                }
+            }
+            if (!ptyEnv.TERM) {
+                ptyEnv.TERM = 'xterm-256color';
+            }
+            if (!this.isWindows && !ptyEnv.LANG) {
+                ptyEnv.LANG = 'en_US.UTF-8';
+            }
+            if (!ptyEnv.PAGER && !this.isWindows) {
+                ptyEnv.PAGER = 'cat';
+            }
+            const spawnOptions = {
+                name: 'xterm-256color',
                 cols,
                 rows,
                 cwd,
-                env: ptyEnv,
-                // 启用 UTF-8 编码
-                encoding: 'utf8'
-            });
+                env: ptyEnv
+            };
+            if (this.isWindows) {
+                const useConpty = process.env.WINDOWS_USE_CONPTY !== 'false';
+                spawnOptions.useConpty = useConpty;
+            }
+            if (!this.isWindows) {
+                spawnOptions.encoding = 'utf8';
+            }
+            const ptyProcess = spawn(shell, this.getDefaultShellArgs(shell), spawnOptions);
             let resolveExit = null;
             const exitPromise = new Promise((resolve) => {
                 resolveExit = resolve;
@@ -71,7 +103,7 @@ export class TerminalManager extends EventEmitter {
                 pid: ptyProcess.pid,
                 shell,
                 cwd,
-                env,
+                env: ptyEnv,
                 created: new Date(),
                 lastActivity: new Date(),
                 status: 'active',
@@ -155,9 +187,9 @@ export class TerminalManager extends EventEmitter {
             // 如果输入不以换行符结尾，自动添加换行符以执行命令
             // 这样用户可以直接发送 "ls" 而不需要手动添加 "\n"
             const autoAppend = appendNewline ?? this.shouldAutoAppendNewline(input);
-            const needsNewline = autoAppend && !input.endsWith('\n') && !input.endsWith('\r');
-            const newlineChar = '\r';
-            const inputWithAutoNewline = needsNewline ? input + newlineChar : input;
+            const needsNewline = autoAppend && !/(?:\r\n|\r|\n)$/.test(input);
+            const newlineSequence = this.isWindows ? '\r\n' : '\r';
+            const inputWithAutoNewline = needsNewline ? input + newlineSequence : input;
             const inputToWrite = this.normalizeNewlines(inputWithAutoNewline);
             // 写入数据到 PTY
             // node-pty 的 write 方法是同步的，但我们需要确保数据被发送
@@ -196,10 +228,24 @@ export class TerminalManager extends EventEmitter {
         if (!value) {
             return value;
         }
+        if (this.isWindows) {
+            return value.replace(/\r?\n/g, '\r\n');
+        }
         // Normalize CRLF to CR first, then convert bare LF to CR so Enter behaves like a real TTY
-        return value
-            .replace(/\r\n/g, '\r')
-            .replace(/\n/g, '\r');
+        return value.replace(/\r\n/g, '\r').replace(/\n/g, '\r');
+    }
+    getDefaultShellArgs(shell) {
+        if (!this.isWindows || !shell) {
+            return [];
+        }
+        const lowerShell = shell.toLowerCase();
+        if (lowerShell.includes('powershell') || lowerShell.includes('pwsh')) {
+            return ['-NoLogo'];
+        }
+        if (lowerShell.endsWith('cmd') || lowerShell.endsWith('cmd.exe')) {
+            return ['/Q'];
+        }
+        return [];
     }
     shouldAutoAppendNewline(input) {
         if (!input) {
@@ -392,7 +438,12 @@ export class TerminalManager extends EventEmitter {
             throw error;
         }
         try {
-            ptyProcess.kill(signal);
+            if (this.isWindows) {
+                ptyProcess.kill();
+            }
+            else {
+                ptyProcess.kill(signal);
+            }
             session.status = 'terminated';
             session.lastActivity = new Date();
             this.emit('terminalKilled', terminalId, signal);
@@ -493,7 +544,12 @@ export class TerminalManager extends EventEmitter {
             return;
         }
         try {
-            ptyProcess.kill('SIGKILL');
+            if (this.isWindows) {
+                ptyProcess.kill();
+            }
+            else {
+                ptyProcess.kill('SIGKILL');
+            }
         }
         catch {
             // ignore kill escalation errors
@@ -577,7 +633,7 @@ export class TerminalManager extends EventEmitter {
             if (!content) {
                 continue;
             }
-            if (this.isPromptLine(content)) {
+            if (this.isPromptLine(content) || this.isInteractivePromptLine(content)) {
                 promptDetected = true;
                 session.hasPrompt = true;
                 session.lastPromptLine = content;
@@ -655,6 +711,16 @@ export class TerminalManager extends EventEmitter {
             return false;
         }
         const promptSuffixes = ['$', '#', '%', '>', ':'];
+        if (this.isWindows) {
+            const winPromptPatterns = [
+                /^PS [^>]*>$/,
+                /^[A-Za-z]:\\[^>]*>$/,
+                /^[A-Za-z]:>$/
+            ];
+            if (winPromptPatterns.some((pattern) => pattern.test(trimmedEnd))) {
+                return true;
+            }
+        }
         // Common case: prompt ends with symbol and space
         for (const suffix of promptSuffixes) {
             if (line.endsWith(`${suffix} `)) {
@@ -668,9 +734,29 @@ export class TerminalManager extends EventEmitter {
         const lastChar = trimmedEnd.charAt(trimmedEnd.length - 1);
         if (promptSuffixes.includes(lastChar)) {
             const prefix = trimmedEnd.slice(0, -1).trim();
-            if (prefix.length > 0 && /[a-zA-Z0-9_@~\/\]\)]$/.test(prefix)) {
+            if (prefix.length > 0 && /[a-zA-Z0-9_@~\/\\\-\]\)\.\s:]$/.test(prefix)) {
                 return true;
             }
+        }
+        return false;
+    }
+    isInteractivePromptLine(line) {
+        if (!line) {
+            return false;
+        }
+        const trimmed = line.trim();
+        if (!trimmed) {
+            return false;
+        }
+        const interactiveKeywords = ['select', 'choose', 'pick', 'enter', 'provide', 'answer', 'input', 'type'];
+        const lower = trimmed.toLowerCase();
+        if (interactiveKeywords.some((keyword) => lower.startsWith(keyword))) {
+            if (/[?:]$/.test(trimmed)) {
+                return true;
+            }
+        }
+        if (/[?:]$/.test(trimmed) && trimmed.length <= 80) {
+            return true;
         }
         return false;
     }

@@ -2,6 +2,8 @@
 
 import { TerminalManager } from './terminal-manager.js';
 import { RestApiServer } from './rest-api.js';
+import { isMainModule } from './utils/module-helpers.js';
+import { isConptySuppressed } from './utils/error-flags.js';
 
 /**
  * 独立的 REST API 服务器入口
@@ -61,18 +63,24 @@ async function main() {
 
   // 处理未捕获的异常
   process.on('uncaughtException', (error) => {
+    if (isConptySuppressed(error)) {
+      return;
+    }
     console.error('Uncaught exception:', error);
     shutdown();
   });
 
   process.on('unhandledRejection', (reason, promise) => {
+    if (isConptySuppressed(reason)) {
+      return;
+    }
     console.error('Unhandled rejection at:', promise, 'reason:', reason);
     shutdown();
   });
 }
 
 // 启动服务器
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isMainModule(import.meta.url)) {
   main().catch((error) => {
     console.error('Failed to start server:', error);
     process.exit(1);

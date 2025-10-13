@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { TerminalManager } from '../terminal-manager.js';
+import { isMainModule } from '../utils/module-helpers.js';
 /**
  * 测试所有 MCP 工具功能
  */
@@ -15,7 +16,7 @@ async function testAllTools() {
         // 测试 1: create_terminal
         console.log('✓ Test 1: create_terminal');
         const terminalId = await terminalManager.createTerminal({
-            shell: process.platform === 'win32' ? 'cmd.exe' : '/bin/bash',
+            shell: process.platform === 'win32' ? 'powershell.exe' : '/bin/bash',
             cwd: process.cwd()
         });
         console.log(`  Terminal created: ${terminalId}`);
@@ -144,7 +145,7 @@ async function testAllTools() {
     }
 }
 // 运行测试
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isMainModule(import.meta.url)) {
     testAllTools().catch(console.error);
 }
 //# sourceMappingURL=test-all-tools.js.map

@@ -4,6 +4,7 @@
  * REST API 使用示例
  * 演示如何通过 HTTP 接口管理终端会话
  */
+import { isMainModule } from '../utils/module-helpers.js';
 
 interface TerminalInfo {
   terminalId: string;
@@ -43,7 +44,7 @@ async function restApiDemo() {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        shell: process.platform === 'win32' ? 'cmd.exe' : '/bin/bash',
+        shell: process.platform === 'win32' ? 'powershell.exe' : '/bin/bash',
         cwd: process.cwd()
       })
     });
@@ -197,6 +198,6 @@ async function restApiDemo() {
 }
 
 // 运行演示
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isMainModule(import.meta.url)) {
   restApiDemo().catch(console.error);
 }

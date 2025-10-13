@@ -17,7 +17,7 @@
     "test:integration:cursor": "node tests/integration/test-cursor-scenario.mjs",
     "test:integration:terminal": "node tests/integration/test-terminal-fixes.mjs",
     "test:all": "npm run test:unit && npm run test:integration",
-    "clean": "rm -rf dist",
+    "clean": "node scripts/clean.cjs",
     "prepare": "npm run build",
     "example:basic": "tsx src/examples/basic-usage.ts",
     "example:rest": "tsx src/examples/rest-api-demo.ts",

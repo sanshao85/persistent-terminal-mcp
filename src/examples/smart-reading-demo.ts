@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { TerminalManager } from '../terminal-manager.js';
+import { isMainModule } from '../utils/module-helpers.js';
 
 /**
  * 智能读取功能演示
@@ -18,7 +19,7 @@ async function smartReadingDemo() {
     // 1. 创建终端会话
     console.log('1. Creating terminal session...');
     const terminalId = await terminalManager.createTerminal({
-      shell: process.platform === 'win32' ? 'cmd.exe' : '/bin/bash',
+      shell: process.platform === 'win32' ? 'powershell.exe' : '/bin/bash',
       cwd: process.cwd()
     });
     console.log(`   Terminal created: ${terminalId}\n`);
@@ -26,7 +27,7 @@ async function smartReadingDemo() {
     // 2. 执行一个会产生大量输出的命令
     console.log('2. Running command that produces lots of output...');
     const longCommand = process.platform === 'win32' 
-      ? 'dir /s' 
+      ? 'Get-ChildItem -Recurse | Select-Object -First 200' 
       : 'find . -type f -name "*.ts" -o -name "*.js" -o -name "*.json" | head -100';
     
     await terminalManager.writeToTerminal({
@@ -167,6 +168,6 @@ async function smartReadingDemo() {
 }
 
 // 运行演示
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isMainModule(import.meta.url)) {
   smartReadingDemo().catch(console.error);
 }
