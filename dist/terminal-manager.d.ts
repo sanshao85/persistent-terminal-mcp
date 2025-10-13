@@ -90,6 +90,7 @@ export declare class TerminalManager extends EventEmitter {
     private extractCommandText;
     private isMostlyPrintable;
     private isPromptLine;
+    private isInteractivePromptLine;
     private buildReadStatus;
 }
 //# sourceMappingURL=terminal-manager.d.ts.map

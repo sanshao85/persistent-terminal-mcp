@@ -65,7 +65,7 @@ export class TerminalManager extends EventEmitter {
       defaultShell: config.defaultShell || (this.isWindows ? 'powershell.exe' : '/bin/bash'),
       defaultCols: config.defaultCols || 80,
       defaultRows: config.defaultRows || 24,
-      compactAnimations: config.compactAnimations ?? true,
+      compactAnimations: config.compactAnimations ?? !this.isWindows,
       animationThrottleMs: config.animationThrottleMs || 100
     };
 
@@ -106,8 +106,8 @@ export class TerminalManager extends EventEmitter {
         ptyEnv.LANG = 'en_US.UTF-8';
       }
 
-      if (!ptyEnv.PAGER) {
-        ptyEnv.PAGER = this.isWindows ? 'more' : 'cat';
+      if (!ptyEnv.PAGER && !this.isWindows) {
+        ptyEnv.PAGER = 'cat';
       }
 
       const spawnOptions: Record<string, unknown> = {
@@ -241,9 +241,10 @@ export class TerminalManager extends EventEmitter {
       // 如果输入不以换行符结尾，自动添加换行符以执行命令
       // 这样用户可以直接发送 "ls" 而不需要手动添加 "\n"
       const autoAppend = appendNewline ?? this.shouldAutoAppendNewline(input);
-      const needsNewline = autoAppend && !input.endsWith('\n') && !input.endsWith('\r');
-      const newlineChar = '\r';
-      const inputWithAutoNewline = needsNewline ? input + newlineChar : input;
+      const needsNewline =
+        autoAppend && !/(?:\r\n|\r|\n)$/.test(input);
+      const newlineSequence = this.isWindows ? '\r\n' : '\r';
+      const inputWithAutoNewline = needsNewline ? input + newlineSequence : input;
       const inputToWrite = this.normalizeNewlines(inputWithAutoNewline);
 
       // 写入数据到 PTY
@@ -288,10 +289,12 @@ export class TerminalManager extends EventEmitter {
       return value;
     }
 
+    if (this.isWindows) {
+      return value.replace(/\r?\n/g, '\r\n');
+    }
+
     // Normalize CRLF to CR first, then convert bare LF to CR so Enter behaves like a real TTY
-    return value
-      .replace(/\r\n/g, '\r')
-      .replace(/\n/g, '\r');
+    return value.replace(/\r\n/g, '\r').replace(/\n/g, '\r');
   }
 
   private getDefaultShellArgs(shell: string): string[] {
@@ -750,11 +753,11 @@ export class TerminalManager extends EventEmitter {
         continue;
       }
 
-      if (this.isPromptLine(content)) {
-        promptDetected = true;
-        session.hasPrompt = true;
-        session.lastPromptLine = content;
-        session.lastPromptAt = entry.timestamp || new Date();
+        if (this.isPromptLine(content) || this.isInteractivePromptLine(content)) {
+          promptDetected = true;
+          session.hasPrompt = true;
+          session.lastPromptLine = content;
+          session.lastPromptAt = entry.timestamp || new Date();
 
         if (session.pendingCommand) {
           session.pendingCommand.completedAt = new Date();
@@ -844,6 +847,17 @@ export class TerminalManager extends EventEmitter {
 
     const promptSuffixes = ['$', '#', '%', '>', ':'];
 
+    if (this.isWindows) {
+      const winPromptPatterns = [
+        /^PS [^>]*>$/,
+        /^[A-Za-z]:\\[^>]*>$/,
+        /^[A-Za-z]:>$/
+      ];
+      if (winPromptPatterns.some((pattern) => pattern.test(trimmedEnd))) {
+        return true;
+      }
+    }
+
     // Common case: prompt ends with symbol and space
     for (const suffix of promptSuffixes) {
       if (line.endsWith(`${suffix} `)) {
@@ -858,9 +872,35 @@ export class TerminalManager extends EventEmitter {
     const lastChar = trimmedEnd.charAt(trimmedEnd.length - 1);
     if (promptSuffixes.includes(lastChar)) {
       const prefix = trimmedEnd.slice(0, -1).trim();
-      if (prefix.length > 0 && /[a-zA-Z0-9_@~\/\]\)]$/.test(prefix)) {
+      if (prefix.length > 0 && /[a-zA-Z0-9_@~\/\\\-\]\)\.\s:]$/.test(prefix)) {
         return true;
       }
+    }
+
+    return false;
+  }
+
+  private isInteractivePromptLine(line: string): boolean {
+    if (!line) {
+      return false;
+    }
+
+    const trimmed = line.trim();
+    if (!trimmed) {
+      return false;
+    }
+
+    const interactiveKeywords = ['select', 'choose', 'pick', 'enter', 'provide', 'answer', 'input', 'type'];
+
+    const lower = trimmed.toLowerCase();
+    if (interactiveKeywords.some((keyword) => lower.startsWith(keyword))) {
+      if (/[?:]$/.test(trimmed)) {
+        return true;
+      }
+    }
+
+    if (/[?:]$/.test(trimmed) && trimmed.length <= 80) {
+      return true;
     }
 
     return false;
@@ -893,3 +933,4 @@ export class TerminalManager extends EventEmitter {
     };
   }
 }
+
