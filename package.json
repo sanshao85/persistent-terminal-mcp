@@ -1,8 +1,56 @@
 {
   "name": "persistent-terminal-mcp",
-  "version": "1.0.1",
+  "version": "1.0.3",
   "description": "MCP server for managing persistent terminal sessions using node-pty",
   "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "persistent-terminal-mcp": "dist/index.js",
+    "persistent-terminal-mcp-rest": "dist/rest-server.js"
+  },
+  "files": [
+    "dist",
+    "public",
+    "README.md",
+    "README.en.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./rest-server": {
+      "types": "./dist/rest-server.d.ts",
+      "import": "./dist/rest-server.js"
+    },
+    "./rest-api": {
+      "types": "./dist/rest-api.d.ts",
+      "import": "./dist/rest-api.js"
+    },
+    "./mcp-server": {
+      "types": "./dist/mcp-server.d.ts",
+      "import": "./dist/mcp-server.js"
+    },
+    "./terminal-manager": {
+      "types": "./dist/terminal-manager.d.ts",
+      "import": "./dist/terminal-manager.js"
+    },
+    "./web-ui-manager": {
+      "types": "./dist/web-ui-manager.d.ts",
+      "import": "./dist/web-ui-manager.js"
+    },
+    "./web-ui-server": {
+      "types": "./dist/web-ui-server.d.ts",
+      "import": "./dist/web-ui-server.js"
+    },
+    "./types": {
+      "types": "./dist/types.d.ts",
+      "import": "./dist/types.js"
+    },
+    "./package.json": "./package.json"
+  },
   "type": "module",
   "scripts": {
     "build": "tsc",
@@ -42,6 +90,14 @@
   ],
   "author": "Persistent Terminal Contributors",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sanshao85/persistent-terminal-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/sanshao85/persistent-terminal-mcp/issues"
+  },
+  "homepage": "https://github.com/sanshao85/persistent-terminal-mcp#readme",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
     "cors": "^2.8.5",
@@ -65,5 +121,9 @@
   },
   "engines": {
     "node": ">=18.0.0"
+  },
+  "sideEffects": false,
+  "publishConfig": {
+    "access": "public"
   }
 }

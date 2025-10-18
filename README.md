@@ -53,29 +53,56 @@
 - **ANSI 转义序列**：正确处理终端控制字符
 - **错误恢复**：自动重连、异常处理机制
 
-## 🚀 快速开始
+## 🚀 安装方式
 
-### 安装与构建
+### ✅ 快速运行（推荐）
+无需安装，直接使用 `npx` 启动：
+```bash
+npx persistent-terminal-mcp
+```
+
+REST 版本同样支持：
+```bash
+npx persistent-terminal-mcp-rest
+```
+
+### 📦 引入到现有项目
+```bash
+npm install persistent-terminal-mcp
+```
+
+安装后即可在代码中引用所有核心类与类型：
+```ts
+import { PersistentTerminalMcpServer } from 'persistent-terminal-mcp';
+```
+
+### 🌐 全局安装（可选）
+```bash
+npm install --global persistent-terminal-mcp
+persistent-terminal-mcp
+```
+
+## 🧪 本地开发
+适合想要修改源码或深入调试的场景：
 ```bash
 npm install          # 安装依赖
-npm run build        # 编译 TypeScript 到 dist/
+npm run build        # 编译 TypeScript → dist/
 npm start            # 通过 stdio 启动 MCP 服务器
 ```
 
-### 开发模式
-开发阶段可直接运行源代码：
+开发阶段也可直接运行 TypeScript 源码：
 ```bash
 npm run dev          # MCP 服务器 (tsx)
 npm run dev:rest     # REST 服务器 (tsx)
 ```
 
-### 调试模式
+### 🐞 调试模式
 启用调试日志（输出到 stderr，不会干扰 MCP 通信）：
 ```bash
-MCP_DEBUG=true npm start
+MCP_DEBUG=true persistent-terminal-mcp
 ```
 
-### 示例脚本
+### 📚 示例脚本
 ```bash
 npm run example:basic        # 基础操作：创建 → 写入 → 读取 → 终止
 npm run example:smart        # 智能读取：head/tail/head-tail 模式演示
@@ -96,9 +123,10 @@ npm run test:fixes           # 关键修复的回归测试
 {
   "mcpServers": {
     "persistent-terminal": {
-      "command": "node",
+      "command": "npx",
       "args": [
-        "/absolute/path/to/node-pty/dist/index.js"
+        "-y",
+        "persistent-terminal-mcp"
       ],
       "env": {
         "MAX_BUFFER_SIZE": "10000",
@@ -111,7 +139,8 @@ npm run test:fixes           # 关键修复的回归测试
 }
 ```
 
-**重要提示**：请将 `/absolute/path/to/node-pty` 替换为实际的安装目录绝对路径。
+**小贴士**：`-y` 会自动确认下载提示，便于在非交互环境中运行。若已通过 `npm install --global persistent-terminal-mcp`
+安装，可将 `command` 改为 `"persistent-terminal-mcp"` 并移除 `-y`。
 
 ### Claude Code (CLI 方式)
 使用命令行快速添加 MCP 服务器：
@@ -122,19 +151,19 @@ claude mcp add persistent-terminal \
   --env SESSION_TIMEOUT=86400000 \
   --env COMPACT_ANIMATIONS=true \
   --env ANIMATION_THROTTLE_MS=100 \
-  -- node /absolute/path/to/node-pty/dist/index.js
+  -- npx -y persistent-terminal-mcp
 ```
 
-**重要提示**：请将 `/absolute/path/to/node-pty` 替换为实际的安装目录绝对路径。
+**提示**：首次使用 `npx` 时需要联网以便下载对应版本的包。
 
-**示例**（假设项目在 `/Users/admin/Desktop/node-pty`）：
+**示例**（全局安装后）：
 ```bash
 claude mcp add persistent-terminal \
   --env MAX_BUFFER_SIZE=10000 \
   --env SESSION_TIMEOUT=86400000 \
   --env COMPACT_ANIMATIONS=true \
   --env ANIMATION_THROTTLE_MS=100 \
-  -- node /Users/admin/Desktop/node-pty/dist/index.js
+  -- persistent-terminal-mcp
 ```
 
 ### Cursor / Cline 配置
@@ -148,8 +177,8 @@ claude mcp add persistent-terminal \
 # 用于配置 persistent-terminal MCP 服务器
 
 [mcp_servers.persistent-terminal]
-command = "node"
-args = ["/absolute/path/to/node-pty/dist/index.js"]
+command = "npx"
+args = ["-y", "persistent-terminal-mcp"]
 
 [mcp_servers.persistent-terminal.env]
 MAX_BUFFER_SIZE = "10000"
@@ -158,7 +187,7 @@ COMPACT_ANIMATIONS = "true"
 ANIMATION_THROTTLE_MS = "100"
 ```
 
-**重要提示**：请将 `/absolute/path/to/node-pty` 替换为实际的安装目录绝对路径。
+**提示**：首次执行 `npx persistent-terminal-mcp` 需保证可以访问 npm 注册表以下载依赖。
 
 ### 环境变量说明
 | 变量 | 说明 | 默认值 |
@@ -168,6 +197,26 @@ ANIMATION_THROTTLE_MS = "100"
 | `COMPACT_ANIMATIONS` | 是否启用 Spinner 压缩 | true |
 | `ANIMATION_THROTTLE_MS` | 动画节流时间（毫秒） | 100 |
 | `MCP_DEBUG` | 是否启用调试日志 | false |
+
+## 🧱 TypeScript 程序化使用
+
+```ts
+import {
+  PersistentTerminalMcpServer,
+  TerminalManager,
+  RestApiServer
+} from 'persistent-terminal-mcp';
+
+const manager = new TerminalManager();
+const rest = new RestApiServer(manager);
+await rest.start(3001);
+
+const mcpServer = new PersistentTerminalMcpServer();
+const server = mcpServer.getServer();
+await server.connect(/* 自定义 transport */);
+```
+
+所有核心类和类型在包的根入口即可获取，详情可参考 `src/index.ts`。
 
 ## 🛠️ MCP 工具一览
 
@@ -440,7 +489,7 @@ npm run test:webui
 
 如果需要 HTTP 接口，可启动 REST 版本：
 ```bash
-npm run start:rest
+npx persistent-terminal-mcp-rest
 ```
 
 服务器默认监听 `3001` 端口（可配置），端点与 MCP 工具一一对应：
@@ -557,4 +606,3 @@ npm run test:integration:terminal   # 终端功能测试
 
 **最后更新**: 2025-10-08
 **版本**: 1.0.1
-

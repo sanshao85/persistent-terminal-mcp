@@ -1,6 +1,13 @@
 #!/usr/bin/env node
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { PersistentTerminalMcpServer } from './mcp-server.js';
+import { fileURLToPath } from 'url';
+import { realpathSync } from 'fs';
+export { PersistentTerminalMcpServer } from './mcp-server.js';
+export { TerminalManager } from './terminal-manager.js';
+export { WebUIManager } from './web-ui-manager.js';
+export { WebUIServer } from './web-ui-server.js';
+export { RestApiServer } from './rest-api.js';
 /**
  * 日志输出函数 - 只在调试模式下输出到 stderr
  * MCP 使用 stdio 进行 JSON-RPC 通信，所以日志必须输出到 stderr
@@ -67,10 +74,21 @@ async function main() {
     });
 }
 // 启动服务器
-if (import.meta.url === `file://${process.argv[1]}`) {
-    main().catch((error) => {
-        process.stderr.write(`[MCP-ERROR] Failed to start server: ${error}\n`);
-        process.exit(1);
-    });
+const scriptPath = fileURLToPath(import.meta.url);
+const entryArg = process.argv[1];
+if (entryArg) {
+    let entryPath = entryArg;
+    try {
+        entryPath = realpathSync(entryArg);
+    }
+    catch {
+        // 保留原始路径用于比较（例如当文件已经被删除时）
+    }
+    if (entryPath === scriptPath) {
+        main().catch((error) => {
+            process.stderr.write(`[MCP-ERROR] Failed to start server: ${error}\n`);
+            process.exit(1);
+        });
+    }
 }
 //# sourceMappingURL=index.js.map

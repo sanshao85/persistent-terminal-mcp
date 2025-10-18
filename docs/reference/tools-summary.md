@@ -82,8 +82,8 @@ Total: 11
 {
   "mcpServers": {
     "persistent-terminal": {
-      "command": "node",
-      "args": ["/Users/admin/Desktop/node-pty/dist/index.js"],
+      "command": "npx",
+      "args": ["-y", "persistent-terminal-mcp"],
       "env": {
         "MAX_BUFFER_SIZE": "10000",
         "SESSION_TIMEOUT": "86400000"
@@ -94,9 +94,9 @@ Total: 11
 ```
 
 **重要提示：**
-1. 将路径替换为您的实际项目路径
-2. 确保已运行 `npm run build` 构建项目
-3. 配置后需要重启 Claude Desktop
+1. 首次运行需要联网下载依赖；如已全局安装可改用 `persistent-terminal-mcp`
+2. 需要离线运行时，可退回到 `node dist/index.js` + 本地构建
+3. 修改配置后请重启 Claude Desktop
 
 ## 使用示例
 

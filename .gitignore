@@ -9,3 +9,6 @@ yarn-error.log*
 coverage/
 dist/.tsbuildinfo
 test/
+.codex/
+test-codex-fix/
+persistent-terminal-mcp-intro.html

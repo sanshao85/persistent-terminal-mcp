@@ -115,8 +115,8 @@
 {
   "mcpServers": {
     "persistent-terminal": {
-      "command": "node",
-      "args": ["/Users/admin/Desktop/node-pty/dist/index.js"],
+      "command": "npx",
+      "args": ["-y", "persistent-terminal-mcp"],
       "env": {
         "MAX_BUFFER_SIZE": "10000",
         "SESSION_TIMEOUT": "86400000"
@@ -126,18 +126,20 @@
 }
 ```
 
-**注意：** 请将路径 `/Users/admin/Desktop/node-pty/dist/index.js` 替换为您的实际项目路径。
+> `-y` 会在首次执行时自动确认下载提示。如已全局安装
+> `persistent-terminal-mcp`，可将 `command` 改为 `persistent-terminal-mcp`
+> 并移除 `-y`。
 
-### 使用 npx 方式（推荐）
+### 使用本地 dist 文件（备选）
 
-如果您的项目已发布到 npm，可以使用更简洁的配置：
+如果希望运行仓库内编译好的 `dist/index.js`，可以改为：
 
 ```json
 {
   "mcpServers": {
     "persistent-terminal": {
-      "command": "npx",
-      "args": ["-y", "persistent-terminal-mcp"],
+      "command": "node",
+      "args": ["/absolute/path/to/dist/index.js"],
       "env": {
         "MAX_BUFFER_SIZE": "10000",
         "SESSION_TIMEOUT": "86400000"

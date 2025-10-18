@@ -20,7 +20,39 @@ so commands continue running even when the requesting client disconnects.
 - **REST API option** – optional Express server mirrors the MCP functionality
   for non-MCP integrations
 
-## Quick Start
+## Installation
+
+### One-off run (recommended for MCP clients)
+Use `npx` to launch the server without a global install:
+```bash
+npx persistent-terminal-mcp
+```
+
+The REST flavor is available the same way:
+```bash
+npx persistent-terminal-mcp-rest
+```
+
+### Project dependency
+Add the package to an existing project (CLI + TypeScript APIs):
+```bash
+npm install persistent-terminal-mcp
+```
+
+Now you can reference both the CLI binaries in `node_modules/.bin/` and the
+TypeScript exports:
+```ts
+import { PersistentTerminalMcpServer } from 'persistent-terminal-mcp';
+```
+
+### Global install (optional)
+```bash
+npm install --global persistent-terminal-mcp
+persistent-terminal-mcp
+```
+
+## Local Development
+Clone the repo if you want to work on the source:
 ```bash
 npm install          # install dependencies
 npm run build        # compile TypeScript → dist/
@@ -36,7 +68,7 @@ npm run dev:rest     # REST server (tsx)
 ### Debugging Mode
 To enable debug logging (output to stderr, won't interfere with MCP communication):
 ```bash
-MCP_DEBUG=true npm start
+MCP_DEBUG=true persistent-terminal-mcp
 ```
 
 ### Example Scripts
@@ -58,9 +90,10 @@ Add the following configuration to your MCP settings file:
 {
   "mcpServers": {
     "persistent-terminal": {
-      "command": "node",
+      "command": "npx",
       "args": [
-        "/absolute/path/to/node-pty/dist/index.js"
+        "-y",
+        "persistent-terminal-mcp"
       ],
       "env": {
         "MAX_BUFFER_SIZE": "10000",
@@ -73,7 +106,8 @@ Add the following configuration to your MCP settings file:
 }
 ```
 
-**Important**: Replace `/absolute/path/to/node-pty` with the actual absolute path to your installation directory.
+**Already installed?** If you installed the package globally, change `command` to
+`"persistent-terminal-mcp"` and remove the `-y` argument.
 
 ### Claude Code (CLI Method)
 Use the command line to quickly add the MCP server:
@@ -84,19 +118,19 @@ claude mcp add persistent-terminal \
   --env SESSION_TIMEOUT=86400000 \
   --env COMPACT_ANIMATIONS=true \
   --env ANIMATION_THROTTLE_MS=100 \
-  -- node /absolute/path/to/node-pty/dist/index.js
+  -- npx -y persistent-terminal-mcp
 ```
 
-**Important**: Replace `/absolute/path/to/node-pty` with the actual absolute path to your installation directory.
+**Tip**: The `-y` flag answers "yes" to the download prompt so the command can run non-interactively.
 
-**Example** (assuming project is at `/Users/admin/Desktop/node-pty`):
+**Example** (global install):
 ```bash
 claude mcp add persistent-terminal \
   --env MAX_BUFFER_SIZE=10000 \
   --env SESSION_TIMEOUT=86400000 \
   --env COMPACT_ANIMATIONS=true \
   --env ANIMATION_THROTTLE_MS=100 \
-  -- node /Users/admin/Desktop/node-pty/dist/index.js
+  -- persistent-terminal-mcp
 ```
 
 ### Cursor / Cline Configuration
@@ -110,8 +144,8 @@ For Codex, add the following to `.codex/config.toml`:
 # For configuring persistent-terminal MCP server
 
 [mcp_servers.persistent-terminal]
-command = "node"
-args = ["/absolute/path/to/node-pty/dist/index.js"]
+command = "npx"
+args = ["-y", "persistent-terminal-mcp"]
 
 [mcp_servers.persistent-terminal.env]
 MAX_BUFFER_SIZE = "10000"
@@ -120,7 +154,7 @@ COMPACT_ANIMATIONS = "true"
 ANIMATION_THROTTLE_MS = "100"
 ```
 
-**Important**: Replace `/absolute/path/to/node-pty` with the actual absolute path to your installation directory.
+**Note**: Ensure the environment running `npx` has network access the first time so it can download the package if necessary.
 
 ### Environment Variables
 | Variable | Description | Default |
@@ -130,6 +164,28 @@ ANIMATION_THROTTLE_MS = "100"
 | `COMPACT_ANIMATIONS` | Enable spinner animation compaction | true |
 | `ANIMATION_THROTTLE_MS` | Animation throttle time in milliseconds | 100 |
 | `MCP_DEBUG` | Enable debug logging | false |
+
+## Programmatic Usage (TypeScript)
+
+```ts
+import {
+  PersistentTerminalMcpServer,
+  TerminalManager,
+  RestApiServer
+} from 'persistent-terminal-mcp';
+
+const manager = new TerminalManager();
+const rest = new RestApiServer(manager);
+
+await rest.start(3001);
+
+const mcpServer = new PersistentTerminalMcpServer();
+const server = mcpServer.getServer();
+await server.connect(/* transport of your choice */);
+```
+
+All core classes and type definitions are available directly from the root
+module. Refer to [`src/index.ts`](src/index.ts) for the complete export list.
 
 ## MCP Tools
 | Tool | Purpose |
@@ -149,7 +205,7 @@ output, and surfacing troubleshooting tips inside compatible clients.
 ## REST API (Optional)
 If you prefer HTTP, start the REST variant:
 ```bash
-npm run start:rest
+npx persistent-terminal-mcp-rest
 ```
 The server listens on port `3001` (configurable) and mirrors the MCP toolset.
 Endpoints include `/api/terminals`, `/api/terminals/:id/input`, `/api/terminals/:id/output`,

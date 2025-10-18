@@ -458,12 +458,18 @@ Claude Code 应该能够：
   "mcpServers": {
     "persistent-terminal": {
       "type": "stdio",
-      "command": "node",
-      "args": ["/absolute/path/to/dist/index.js"]
-    }
-  }
+      "command": "npx",
+      "args": [
+        "-y",
+        "persistent-terminal-mcp"
+      ]
+}
+}
 }
 ```
+
+> **提示**：若已全局安装 `persistent-terminal-mcp`，可将 `command` 修改为
+> `persistent-terminal-mcp` 并删除 `-y` 参数。
 
 ### 完整配置
 
@@ -472,8 +478,11 @@ Claude Code 应该能够：
   "mcpServers": {
     "persistent-terminal": {
       "type": "stdio",
-      "command": "node",
-      "args": ["/absolute/path/to/dist/index.js"],
+      "command": "npx",
+      "args": [
+        "-y",
+        "persistent-terminal-mcp"
+      ],
       "env": {
         "MAX_BUFFER_SIZE": "10000",
         "SESSION_TIMEOUT": "86400000"
@@ -507,7 +516,7 @@ claude --mcp-debug
 
 ```bash
 # 直接运行 MCP 服务器测试
-node /Users/admin/Desktop/node-pty/dist/index.js
+npx -y persistent-terminal-mcp
 ```
 
 如果服务器正常，应该等待输入（这是正常的，因为它是 stdio 模式）。
@@ -544,4 +553,3 @@ node /Users/admin/Desktop/node-pty/dist/index.js
 ---
 
 **配置完成后，你就可以在 Claude Code 中使用 persistent-terminal MCP 来执行长时间运行的命令了！** 🎉
-

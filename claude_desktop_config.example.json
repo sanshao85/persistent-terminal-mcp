@@ -1,8 +1,8 @@
 {
   "mcpServers": {
     "persistent-terminal": {
-      "command": "node",
-      "args": ["/absolute/path/to/your/project/dist/index.js"],
+      "command": "npx",
+      "args": ["-y", "persistent-terminal-mcp"],
       "env": {
         "MAX_BUFFER_SIZE": "10000",
         "SESSION_TIMEOUT": "86400000"
@@ -10,4 +10,3 @@
     }
   }
 }
-
