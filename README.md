@@ -35,6 +35,13 @@
 - **多实例支持**：自动端口分配，支持多个 AI 客户端同时使用
 - **VS Code 风格**：暗色主题，简洁美观的界面设计
 
+### 🤖 Codex 自动修复 Bug
+- **完全自动化**：集成 OpenAI Codex CLI，自动修复代码 Bug
+- **文档驱动**：AI 描述保存为 MD 文档，Codex 读取并修复
+- **详细报告**：生成完整的修复报告，包含修改前后对比
+- **智能等待**：自动检测 Codex 执行完成，默认超时 10 分钟
+- **历史记录**：所有 Bug 描述和修复报告永久保存在 docs/ 目录
+
 ### 🔌 多种集成方式
 - **MCP 协议**：原生支持 Claude Desktop、Claude Code、Cursor、Cline 等客户端
 - **REST API**：提供 HTTP 接口，方便非 MCP 场景集成
@@ -174,7 +181,8 @@ ANIMATION_THROTTLE_MS = "100"
 | `get_terminal_stats` | 查看统计信息 | `terminalId` |
 | `list_terminals` | 列出所有活跃终端 | 无 |
 | `kill_terminal` | 终止会话 | `terminalId`, `signal` |
-| `open_terminal_ui` 🆕 | 打开 Web 管理界面 | `port`, `autoOpen` |
+| `open_terminal_ui` | 打开 Web 管理界面 | `port`, `autoOpen` |
+| `fix_bug_with_codex` 🆕 | 使用 Codex 自动修复 Bug | `description`, `cwd`, `timeout` |
 
 ### 工具详细说明
 
@@ -240,9 +248,81 @@ ANIMATION_THROTTLE_MS = "100"
 **使用场景**：
 - 执行命令后确保获取完整输出
 - 等待交互式应用启动完成
-- 等待长时间运行的命令完成
 
-#### `open_terminal_ui` 🆕 - 打开 Web 管理界面
+#### `fix_bug_with_codex` 🆕 - 自动修复 Bug
+使用 OpenAI Codex CLI 自动分析和修复代码中的 Bug。
+
+**参数**：
+- `description` (必需): 详细的 Bug 描述，必须包含：
+  - 问题症状（具体的错误行为）
+  - 期望行为（应该如何工作）
+  - 问题位置（文件路径、行号、函数名）
+  - 相关代码（有问题的代码片段）
+  - 根本原因（为什么会出现这个问题）
+  - 修复建议（如何修复）
+  - 影响范围（还会影响什么）
+  - 相关文件（所有相关的文件路径）
+  - 测试用例（如何验证修复是否有效）
+  - 上下文信息（有助于理解问题的背景）
+- `cwd` (可选): 工作目录，默认为当前目录
+- `timeout` (可选): 超时时间（毫秒），默认 600000（10 分钟）
+
+**返回**：
+- `terminalId`: 执行 Codex 的终端 ID
+- `reportPath`: 修复报告路径
+- `reportExists`: 报告是否存在
+- `workingDir`: 工作目录
+- `executionTime`: 执行时间（秒）
+- `timedOut`: 是否超时
+- `output`: 终端输出
+- `reportPreview`: 报告预览
+
+**工作流程**：
+1. AI 提供详细的 Bug 描述
+2. 工具将描述保存到 `docs/codex-bug-description-TIMESTAMP.md`
+3. Codex 读取文档并分析问题
+4. Codex 修复 Bug 并生成报告 `docs/codex-fix-TIMESTAMP.md`
+5. AI 读取报告并总结给用户
+
+**重要提示**：
+- ⚠️ 此工具具有完全系统访问权限（`danger-full-access`）
+- ⚠️ Codex 可以修改任何文件，建议在 Git 仓库中使用
+- ✅ 只使用英文描述（避免 UTF-8 编码问题）
+- ✅ 描述越详细，修复质量越高
+
+**示例**：
+```javascript
+fix_bug_with_codex({
+  description: `Username validation bug in auth.js file.
+
+PROBLEM:
+- File: src/auth/login.ts, line 45
+- Code: const usernameRegex = /^[a-zA-Z0-9]{3,20}$/
+- Symptom: Username 'user_name' is rejected with 'Invalid username' error
+- Expected: Should accept usernames with underscores and hyphens
+
+ROOT CAUSE:
+- Regex [a-zA-Z0-9] only allows letters and numbers
+- Missing support for underscore and hyphen characters
+
+SUGGESTED FIX:
+- Change regex to: /^[a-zA-Z0-9_-]{3,20}$/
+
+VERIFICATION:
+- Run: npm test
+- Expected: all tests pass`,
+  cwd: '/path/to/project',
+  timeout: 600000
+})
+```
+
+**详细文档**：
+- [Codex Bug Fix Tool 功能文档](docs/features/CODEX_BUG_FIX_TOOL.md)
+- [Codex Bug Fix Tool 测试报告](docs/features/CODEX_BUG_FIX_TEST_REPORT.md)
+
+> **💡 提示**：Codex CLI 需要 OpenAI API 访问权限。如果你在国内或遇到访问问题，可以考虑使用 [Codex CLI 镜像服务](https://www.codex-cli.top)（¥99/月，每日 $90 额度），让 AI 编程更流畅。
+
+#### `open_terminal_ui` - 打开 Web 管理界面
 启动一个基于浏览器的可视化终端管理界面。
 
 **参数**：
@@ -254,6 +334,84 @@ ANIMATION_THROTTLE_MS = "100"
 - `port`: 实际使用的端口
 - `mode`: 启动模式（new/existing）
 - `autoOpened`: 是否自动打开了浏览器
+
+#### `fix_bug_with_codex` 🆕 - 使用 Codex 自动修复 Bug
+调用 OpenAI Codex CLI 自动分析和修复代码中的 bug，并生成详细的修复报告。
+
+**⚠️ 重要提示**：
+- 此工具使用 **完全权限模式**（`--sandbox danger-full-access --ask-for-approval never`）
+- Codex 可以完全控制代码库，请谨慎使用
+- 建议在使用前备份代码或使用版本控制
+
+**参数**：
+- `description` (必填): **详细的** bug 描述，必须包含：
+  - 问题现象（具体的错误表现）
+  - 预期行为（应该如何工作）
+  - 问题位置（文件路径、行号）
+  - 相关代码片段
+  - 根本原因（如果知道）
+  - 修复建议（如果有）
+  - 影响范围（可能影响的功能）
+  - 相关文件（所有相关文件路径）
+  - 测试用例（如何验证修复）
+  - 上下文信息（背景资料）
+- `cwd` (可选): 工作目录，默认当前目录
+- `timeout` (可选): 超时时间（毫秒），默认 600000（10分钟）
+
+**返回**：
+- `terminalId`: 执行 Codex 的终端 ID
+- `reportPath`: 修复报告的路径（`docs/codex-fix-TIMESTAMP.md`）
+- `reportExists`: 报告是否成功生成
+- `executionTime`: 执行时间
+- `output`: Codex 的终端输出
+
+**工作流程**：
+1. AI 助手收集详细的 bug 信息
+2. 调用此工具，传入详细描述
+3. Codex 分析问题并修复代码
+4. Codex 在 `docs/` 目录生成详细报告
+5. AI 助手读取报告并向用户汇报
+
+**报告内容**：
+- 问题描述
+- 修改的文件列表
+- 每个文件的具体修改（修改前/修改后对比）
+- 修改原因说明
+- 测试建议
+- 注意事项
+
+**使用示例**：
+```
+用户：登录功能有 bug，用户名验证总是失败
+
+AI 助手：
+1. [查看相关文件，理解问题]
+2. [调用 fix_bug_with_codex]
+   {
+     "description": "登录功能用户名验证存在 bug，具体表现：
+     1. 问题现象：用户输入 'user_name' 时被拒绝
+     2. 预期行为：应该接受包含下划线的用户名
+     3. 问题位置：src/auth/login.ts 第 45 行
+     4. 相关代码：const usernameRegex = /^[a-zA-Z0-9]{3,20}$/
+     5. 根本原因：正则表达式不允许下划线
+     ..."
+   }
+3. [等待 Codex 完成]
+4. [读取报告] view("docs/codex-fix-2025-10-18T00-35-12.md")
+5. [向用户汇报修复结果]
+```
+
+**前置要求**：
+- 已安装 Codex CLI：`npm install -g @openai/codex-cli`
+- 已配置 Codex 认证
+- 项目中存在 `docs/` 目录
+
+**最佳实践**：
+- 提供尽可能详细的 bug 描述（描述越详细，修复质量越高）
+- 在调用前先查看相关文件，理解问题
+- 修复后务必运行测试验证
+- 查看生成的报告了解具体修改
+- 使用版本控制，便于回滚
 
 ## 🌐 Web 管理界面
 

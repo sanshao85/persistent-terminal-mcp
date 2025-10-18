@@ -14,6 +14,10 @@ export declare class PersistentTerminalMcpServer {
      */
     private createTerminalResponse;
     /**
+     * 使用 Codex 修复 Bug
+     */
+    private fixBugWithCodex;
+    /**
      * 设置 MCP 工具
      */
     private setupTools;

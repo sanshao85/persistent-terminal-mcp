@@ -183,4 +183,19 @@ export interface WebUIStartResult {
     mode: 'new' | 'existing';
     autoOpened: boolean;
 }
+export interface FixBugWithCodexInput {
+    description: string;
+    cwd?: string;
+    timeout?: number;
+}
+export interface FixBugWithCodexResult {
+    terminalId: string;
+    reportPath: string | null;
+    reportExists: boolean;
+    workingDir: string;
+    executionTime: number;
+    timedOut: boolean;
+    output: string;
+    reportPreview: string | null;
+}
 //# sourceMappingURL=types.d.ts.map

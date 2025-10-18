@@ -21,6 +21,8 @@ import {
   TerminalStatsResult,
   TerminalCreateOptions
 } from './types.js';
+import { promises as fs } from 'fs';
+import * as path from 'path';
 
 /**
  * MCP 服务器实现
@@ -127,6 +129,237 @@ export class PersistentTerminalMcpServer {
         status: result.status
       }
     } as CallToolResult;
+  }
+
+  /**
+   * 使用 Codex 修复 Bug
+   */
+  private async fixBugWithCodex(params: {
+    description: string;
+    cwd?: string;
+    timeout?: number;
+  }): Promise<CallToolResult> {
+    const workingDir = params.cwd || process.cwd();
+    const timeoutMs = params.timeout || 600000; // 默认 10 分钟
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const reportFileName = `codex-fix-${timestamp}.md`;
+    const reportPath = `docs/${reportFileName}`;
+
+    try {
+      // 构建我们的固定后缀提示词（纯英文，避免 UTF-8 编码问题）
+      const ourSuffix = `
+
+---
+REQUIREMENTS AFTER FIX:
+
+1. Create a detailed fix report in docs/ directory: ${reportPath}
+
+2. The report MUST use the following Markdown format:
+
+# Bug Fix Report
+
+## Problem Description
+${params.description}
+
+## Fix Time
+${new Date().toISOString()}
+
+## Modified Files
+List all modified files with their full paths
+
+## Detailed Changes
+For each file, provide detailed explanation:
+
+### File: filename
+**Changes**: Brief description
+
+**Before**:
+\`\`\`language
+original code
+\`\`\`
+
+**After**:
+\`\`\`language
+new code
+\`\`\`
+
+**Reason**: Why this change was made
+
+## Testing Recommendations
+1. Unit test commands
+2. Manual testing steps
+3. Expected results
+
+## Notes
+Important notes about these changes
+
+## Summary
+Summarize this fix in 1-2 sentences
+
+---
+Report generated: ${new Date().toISOString()}
+Fix tool: OpenAI Codex
+`;
+
+      // 组合最终提示词：AI 的描述 + 我们的后缀
+      const finalPrompt = params.description + ourSuffix;
+
+      // 将问题描述写入 MD 文档，避免 shell 转义问题
+      const promptFileName = `codex-bug-description-${timestamp}.md`;
+      const promptFile = path.join(workingDir, 'docs', promptFileName);
+
+      // 确保 docs 目录存在
+      await fs.mkdir(path.join(workingDir, 'docs'), { recursive: true });
+
+      // 写入问题描述文档
+      await fs.writeFile(promptFile, finalPrompt, 'utf-8');
+
+      // 创建专用终端
+      const terminalId = await this.terminalManager.createTerminal({
+        cwd: workingDir,
+        shell: '/bin/bash'
+      });
+
+      // 构建 Codex 命令 - 使用非交互模式 exec，从 MD 文档读取问题描述
+      // 使用 --dangerously-bypass-approvals-and-sandbox 实现完全自动化
+      const codexCmd = `codex exec --dangerously-bypass-approvals-and-sandbox --skip-git-repo-check "$(cat docs/${promptFileName})"`;
+
+      // 执行命令
+      await this.terminalManager.writeToTerminal({
+        terminalId,
+        input: codexCmd
+      });
+
+      // 智能等待完成
+      const startTime = Date.now();
+      let lastOutputLength = 0;
+      let stableCount = 0;
+      const stableThreshold = 3; // 连续3次输出不变则认为完成
+
+      while (Date.now() - startTime < timeoutMs) {
+        await new Promise(resolve => setTimeout(resolve, 5000)); // 每5秒检查
+
+        // 只读取最后 50 行来检查状态，避免读取过多数据
+        const result = await this.terminalManager.readFromTerminal({
+          terminalId,
+          mode: 'tail',
+          tailLines: 50
+        });
+
+        // 检查输出是否稳定
+        if (result.output.length === lastOutputLength) {
+          stableCount++;
+          if (stableCount >= stableThreshold) {
+            break; // 输出稳定，认为完成
+          }
+        } else {
+          stableCount = 0;
+          lastOutputLength = result.output.length;
+        }
+
+        // 检查是否有明确的完成标志
+        if (result.output.includes('Task completed') ||
+            result.output.includes('修复完成') ||
+            result.output.includes('Fix completed')) {
+          break;
+        }
+      }
+
+      const executionTime = Date.now() - startTime;
+
+      // 读取最终输出（只读取最后 50 行，避免上下文过长）
+      const finalResult = await this.terminalManager.readFromTerminal({
+        terminalId,
+        mode: 'tail',
+        tailLines: 50
+      });
+
+      // 检查报告是否生成
+      const fullReportPath = path.join(workingDir, reportPath);
+
+      let reportExists = false;
+      let reportContent = '';
+
+      try {
+        reportContent = await fs.readFile(fullReportPath, 'utf-8');
+        reportExists = true;
+      } catch (error) {
+        // 报告不存在
+      }
+
+      // 构建返回消息
+      let resultMessage = `🤖 Codex Bug Fix Execution Completed\n\n`;
+      resultMessage += `📊 Execution Details:\n`;
+      resultMessage += `- Terminal ID: ${terminalId}\n`;
+      resultMessage += `- Working Directory: ${workingDir}\n`;
+      resultMessage += `- Execution Time: ${(executionTime / 1000).toFixed(2)} seconds\n`;
+      resultMessage += `- Timeout: ${timeoutMs / 1000} seconds\n\n`;
+
+      if (reportExists) {
+        resultMessage += `✅ Fix Report Generated Successfully!\n\n`;
+        resultMessage += `📄 Report Location: ${reportPath}\n\n`;
+        resultMessage += `🔔 IMPORTANT - NEXT STEPS FOR YOU (AI Assistant):\n`;
+        resultMessage += `1. Read the report using: view("${reportPath}")\n`;
+        resultMessage += `2. Analyze the changes Codex made\n`;
+        resultMessage += `3. Summarize the fix to the user in simple terms\n`;
+        resultMessage += `4. Provide the testing recommendations from the report\n`;
+        resultMessage += `5. Ask the user if they want to review the changes\n\n`;
+        resultMessage += `📋 Report Preview (first 500 chars):\n`;
+        resultMessage += `${'='.repeat(60)}\n`;
+        resultMessage += reportContent.substring(0, 500);
+        if (reportContent.length > 500) {
+          resultMessage += `\n... (truncated, read full report for details)\n`;
+        }
+        resultMessage += `\n${'='.repeat(60)}\n`;
+      } else {
+        resultMessage += `⚠️ Warning: Fix Report Not Found!\n\n`;
+        resultMessage += `Expected location: ${reportPath}\n\n`;
+        resultMessage += `Possible reasons:\n`;
+        resultMessage += `1. Codex encountered an error\n`;
+        resultMessage += `2. The fix was too simple and Codex didn't generate a report\n`;
+        resultMessage += `3. Codex is still running (check terminal output)\n\n`;
+        resultMessage += `📋 Please check the Codex output below for details.\n`;
+      }
+
+      resultMessage += `\n${'='.repeat(60)}\n`;
+      resultMessage += `📺 Codex Terminal Output:\n`;
+      resultMessage += `${'='.repeat(60)}\n`;
+      resultMessage += finalResult.output;
+      resultMessage += `\n${'='.repeat(60)}\n`;
+
+      // 添加问题描述文档的信息
+      resultMessage += `\n📝 Bug Description Document: docs/${promptFileName}\n`;
+      resultMessage += `(This document contains the problem description you provided)\n`;
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: resultMessage
+          }
+        ],
+        structuredContent: {
+          terminalId,
+          reportPath: reportExists ? reportPath : null,
+          reportExists,
+          workingDir,
+          executionTime,
+          timedOut: executionTime >= timeoutMs,
+          output: finalResult.output,
+          reportPreview: reportExists ? reportContent.substring(0, 500) : null
+        }
+      } as CallToolResult;
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Error executing Codex bug fix: ${error instanceof Error ? error.message : String(error)}`
+          }
+        ],
+        isError: true
+      } as CallToolResult;
+    }
   }
 
   /**
@@ -586,6 +819,139 @@ export class PersistentTerminalMcpServer {
             isError: true
           };
         }
+      }
+    );
+
+    // Codex Bug Fix Tool
+    this.server.tool(
+      'fix_bug_with_codex',
+      `Use OpenAI Codex CLI to automatically fix bugs with FULL SYSTEM ACCESS.
+
+WARNING CRITICAL: This tool gives Codex COMPLETE control over the codebase!
+- Sandbox: danger-full-access (no restrictions)
+- Approval: never (fully automated)
+
+YOUR RESPONSIBILITY (AI Assistant):
+You MUST provide a DETAILED and COMPREHENSIVE bug description to Codex.
+The quality of the fix depends entirely on how well you describe the problem!
+
+IMPORTANT NOTES:
+1. ONLY use ENGLISH in the description (no Chinese, no emoji)
+2. UTF-8 encoding issues may occur with non-ASCII characters
+3. Keep the description clear, structured, and detailed
+4. Use plain text formatting (avoid special characters)
+
+GOOD DESCRIPTION EXAMPLE (DO THIS):
+"Username validation bug in auth.js file.
+
+PROBLEM:
+- File: src/auth/login.ts, line 45
+- Code: const usernameRegex = /^[a-zA-Z0-9]{3,20}$/
+- Symptom: Username 'user_name' is rejected with 'Invalid username' error
+- Expected: Should accept usernames with underscores and hyphens
+
+ROOT CAUSE:
+- Regex [a-zA-Z0-9] only allows letters and numbers
+- Missing support for underscore and hyphen characters
+
+SUGGESTED FIX:
+- Change regex to: /^[a-zA-Z0-9_-]{3,20}$/
+- This will allow underscores and hyphens in usernames
+
+IMPACT:
+- Affects login() and register() functions
+- May impact existing user validation logic
+
+RELATED FILES:
+- src/auth/login.ts (main fix)
+- src/auth/validation.ts (may need update)
+- tests/auth/login.test.ts (for verification)
+
+TEST CASES:
+- 'user_name' should pass
+- 'user-name' should pass
+- 'user@name' should fail
+
+VERIFICATION:
+- Run: npm test
+- Expected: all tests pass"
+
+BAD DESCRIPTION EXAMPLE (DON'T DO THIS):
+"Login has a bug, please fix it"
+"Username validation is wrong"
+"Fix the regex in auth.js"
+
+WHAT TO INCLUDE IN YOUR DESCRIPTION:
+1. Problem symptoms - specific error behavior
+2. Expected behavior - how it should work
+3. Problem location - file path, line number, function name
+4. Related code - the problematic code snippet
+5. Root cause - why this problem occurs (if known)
+6. Fix suggestions - how to fix it (if you have ideas)
+7. Impact scope - what else might be affected
+8. Related files - all relevant file paths
+9. Test cases - how to verify the fix works
+10. Context information - background that helps understand the problem
+
+HOW THIS TOOL WORKS:
+1. Your bug description will be saved to: docs/codex-bug-description-TIMESTAMP.md
+2. Codex will read this document and analyze the problem
+3. Codex will fix the bug in the codebase
+4. Codex will generate a fix report in: docs/codex-fix-TIMESTAMP.md
+5. Both documents will be preserved in docs/ for reference
+
+WORKFLOW AFTER CALLING THIS TOOL:
+1. Wait for Codex to complete (up to 10 minutes)
+2. YOU MUST read the fix report: docs/codex-fix-TIMESTAMP.md
+3. YOU MUST summarize the changes to the user
+4. YOU MUST provide testing recommendations
+5. Optionally, review the bug description document to see what was sent to Codex
+
+WHAT CODEX WILL DO:
+1. Read your bug description from docs/codex-bug-description-TIMESTAMP.md
+2. Analyze the problem based on your description
+3. Fix the bug in the codebase
+4. Generate a comprehensive fix report in docs/codex-fix-TIMESTAMP.md
+5. The report includes: problem, changes, files modified, testing guide
+
+TIMEOUT:
+Default: 10 minutes (600000ms)
+Adjust if the fix is complex or involves many files
+
+TIP:
+Before calling this tool, gather as much information as possible:
+- Read error messages
+- Check relevant files
+- Understand the expected behavior
+- Review recent changes that might have caused the bug`,
+      {
+        description: z.string().describe(`DETAILED bug description for Codex.
+
+MUST INCLUDE:
+- Problem symptoms (what's broken)
+- Expected behavior (what should happen)
+- Problem location (file paths, line numbers)
+- Related code snippets
+- Root cause (if known)
+- Fix suggestions (if any)
+- Impact scope (what else might be affected)
+- Related files (all relevant file paths)
+- Test cases (how to verify the fix)
+- Context (background information)
+
+The more detailed, the better the fix!`),
+        cwd: z.string().optional().describe('Working directory (default: current directory)'),
+        timeout: z.number().optional().describe('Timeout in milliseconds (default: 600000 = 10 minutes)')
+      },
+      {
+        title: 'Fix Bug with Codex (Full Access)',
+        readOnlyHint: false
+      },
+      async ({ description, cwd, timeout }): Promise<CallToolResult> => {
+        const params: { description: string; cwd?: string; timeout?: number } = { description };
+        if (cwd) params.cwd = cwd;
+        if (timeout) params.timeout = timeout;
+        return await this.fixBugWithCodex(params);
       }
     );
   }

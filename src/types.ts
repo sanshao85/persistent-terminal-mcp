@@ -211,3 +211,21 @@ export interface WebUIStartResult {
   mode: 'new' | 'existing';
   autoOpened: boolean;
 }
+
+// Codex Bug Fix 相关类型
+export interface FixBugWithCodexInput {
+  description: string;    // Bug 详细描述（必填）
+  cwd?: string;          // 工作目录（可选）
+  timeout?: number;      // 超时时间（可选，默认 600000ms = 10分钟）
+}
+
+export interface FixBugWithCodexResult {
+  terminalId: string;           // 执行 Codex 的终端 ID
+  reportPath: string | null;    // 报告文件路径
+  reportExists: boolean;        // 报告是否成功生成
+  workingDir: string;           // 工作目录
+  executionTime: number;        // 执行时间（毫秒）
+  timedOut: boolean;            // 是否超时
+  output: string;               // Codex 终端输出
+  reportPreview: string | null; // 报告预览（前 500 字符）
+}
