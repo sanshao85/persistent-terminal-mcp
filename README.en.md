@@ -84,19 +84,17 @@ npm run test:fixes           # regression tests for recent bug fixes
 ### Claude Desktop
 
 #### macOS / Linux
-Add the following configuration to your MCP settings file:
 
 **Configuration file location**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+
+Add the following configuration to your MCP settings file:
 
 ```json
 {
   "mcpServers": {
     "persistent-terminal": {
       "command": "npx",
-      "args": [
-        "-y",
-        "persistent-terminal-mcp"
-      ],
+      "args": ["-y", "persistent-terminal-mcp"],
       "env": {
         "MAX_BUFFER_SIZE": "10000",
         "SESSION_TIMEOUT": "86400000",
@@ -108,23 +106,20 @@ Add the following configuration to your MCP settings file:
 }
 ```
 
-**Already installed?** If you installed the package globally, change `command` to
-`"persistent-terminal-mcp"` and remove the `-y` argument.
+**Note**:
+- The `-y` flag automatically confirms npx download prompts
+- If globally installed (`npm install -g persistent-terminal-mcp`), change `command` to `"persistent-terminal-mcp"` and remove `-y` from `args`
 
 #### Windows
-**Configuration file location**: `%APPDATA%\Claude\mcp.json` (or `claude_desktop_config.json` on older builds)
+
+**Configuration file location**: `%APPDATA%\Claude\claude_desktop_config.json`
 
 ```json
 {
   "mcpServers": {
     "persistent-terminal": {
       "command": "cmd",
-      "args": [
-        "/c",
-        "npx",
-        "-y",
-        "persistent-terminal-mcp"
-      ],
+      "args": ["/c", "npx", "-y", "persistent-terminal-mcp"],
       "env": {
         "MAX_BUFFER_SIZE": "10000",
         "SESSION_TIMEOUT": "86400000",
@@ -136,10 +131,16 @@ Add the following configuration to your MCP settings file:
 }
 ```
 
-**Windows note**: Wrapping `npx` with `cmd /c` ensures the executable is resolved correctly. If you installed the package globally,
-replace the arguments with `"persistent-terminal-mcp"` and omit `-y`.
+**Note**:
+- Windows requires `cmd /c` to invoke `npx`
+- If globally installed, change `args` to `["/c", "persistent-terminal-mcp"]`
 
-### Claude Code (CLI Method)
+---
+
+### Claude Code
+
+#### macOS / Linux
+
 Use the command line to quickly add the MCP server:
 
 ```bash
@@ -151,29 +152,48 @@ claude mcp add persistent-terminal \
   -- npx -y persistent-terminal-mcp
 ```
 
-**Tip**: The `-y` flag answers "yes" to the download prompt so the command can run non-interactively.
+**Or** edit the configuration file `~/.claude.json`:
 
-> 📚 **Windows users**: Due to argument parsing quirks, `claude mcp add` may not
-> forward `-y` to `npx`. See
-> [Windows persistent-terminal MCP setup](docs/clients/claude-code-windows.md)
-> for the recommended project-level `.mcp.json` approach and an optional script
-> for updating `~/.claude.json`.
-
-**Example** (global install):
-```bash
-claude mcp add persistent-terminal \
-  --env MAX_BUFFER_SIZE=10000 \
-  --env SESSION_TIMEOUT=86400000 \
-  --env COMPACT_ANIMATIONS=true \
-  --env ANIMATION_THROTTLE_MS=100 \
-  -- persistent-terminal-mcp
+```json
+{
+  "mcpServers": {
+    "persistent-terminal": {
+      "command": "npx",
+      "args": ["-y", "persistent-terminal-mcp"],
+      "env": {
+        "MAX_BUFFER_SIZE": "10000",
+        "SESSION_TIMEOUT": "86400000",
+        "COMPACT_ANIMATIONS": "true",
+        "ANIMATION_THROTTLE_MS": "100"
+      }
+    }
+  }
+}
 ```
 
-### Cursor / Cline Configuration
+#### Windows
+
+> ⚠️ **Important for Windows users**:
+>
+> Due to argument parsing issues with `claude mcp add` on Windows, **command-line configuration is not recommended**.
+>
+> Please refer to the dedicated setup guide: [Windows persistent-terminal MCP setup](docs/clients/claude-code-windows.md)
+>
+> This guide provides two recommended approaches:
+> - ✅ **Project-level configuration** (recommended): Create a `.mcp.json` file in your project root
+> - ✅ **Global configuration**: Use a Python script to modify `~/.claude.json`
+
+---
+
+### Cursor / Cline
+
 Configuration is similar to Claude Desktop. Please refer to the MCP configuration documentation for each client.
 
-### Codex Configuration
-For Codex, add the following to `.codex/config.toml`:
+### Codex
+
+#### macOS / Linux
+
+Add the following to `.codex/config.toml`:
 
 ```toml
 # MCP Server Configuration (TOML Format)
@@ -190,15 +210,28 @@ COMPACT_ANIMATIONS = "true"
 ANIMATION_THROTTLE_MS = "100"
 ```
 
-**Windows note**: Use `command = "cmd"` and `args = ["/c", "npx", "-y", "persistent-terminal-mcp"]` so Codex can launch `npx` correctly.
+#### Windows
+
+Add the following to `.codex/config.toml`:
 
 ```toml
+# MCP Server Configuration (TOML Format)
+# For configuring persistent-terminal MCP server
+
 [mcp_servers.persistent-terminal]
 command = "cmd"
 args = ["/c", "npx", "-y", "persistent-terminal-mcp"]
+
+[mcp_servers.persistent-terminal.env]
+MAX_BUFFER_SIZE = "10000"
+SESSION_TIMEOUT = "86400000"
+COMPACT_ANIMATIONS = "true"
+ANIMATION_THROTTLE_MS = "100"
 ```
 
-**Note**: Ensure the environment running `npx` has network access the first time so it can download the package if necessary.
+**Note**: Windows requires `cmd /c` to invoke `npx`
+
+---
 
 ### Environment Variables
 | Variable | Description | Default |
