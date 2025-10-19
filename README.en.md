@@ -173,11 +173,14 @@ claude mcp add persistent-terminal \
 
 #### Windows
 
-> ⚠️ **Important for Windows users**:
+> # ⚠️ **Important for Windows users**
 >
-> Due to argument parsing issues with `claude mcp add` on Windows, **command-line configuration is not recommended**.
+> ## **Claude Code** has argument parsing issues with `claude mcp add` command on Windows
 >
-> Please refer to the dedicated setup guide: [Windows persistent-terminal MCP setup](docs/clients/claude-code-windows.md)
+> ### **🚫 Command-line configuration is NOT recommended**
+>
+> Please refer to the dedicated setup guide:
+> ### 📖 [Windows persistent-terminal MCP setup](docs/clients/claude-code-windows.md)
 >
 > This guide provides two recommended approaches:
 > - ✅ **Project-level configuration** (recommended): Create a `.mcp.json` file in your project root

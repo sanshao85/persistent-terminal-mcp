@@ -206,11 +206,14 @@ claude mcp add persistent-terminal \
 
 #### Windows
 
-> ⚠️ **Windows 用户请注意**：
+> # ⚠️ **Windows 用户请注意**
 >
-> 由于 Windows 下 `claude mcp add` 命令存在参数解析问题，**不推荐使用命令行方式**。
+> ## **Claude Code** 在 Windows 下 `claude mcp add` 命令存在参数解析问题
 >
-> 请参考专门的配置文档：[《Windows 下配置 persistent-terminal MCP》](docs/clients/claude-code-windows.md)
+> ### **🚫 不推荐使用命令行方式**
+>
+> 请参考专门的配置文档：
+> ### 📖 [《Windows 下配置 persistent-terminal MCP》](docs/clients/claude-code-windows.md)
 >
 > 该文档提供了两种推荐方案：
 > - ✅ **项目级配置**（推荐）：在项目根目录创建 `.mcp.json` 文件
