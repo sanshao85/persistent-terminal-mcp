@@ -114,7 +114,9 @@ npm run test:fixes           # 关键修复的回归测试
 
 ## ⚙️ MCP 客户端配置
 
-### Claude Desktop (macOS / Linux)
+### Claude Desktop
+
+#### macOS / Linux
 在 MCP 配置文件中添加以下配置：
 
 **配置文件位置**: `~/Library/Application Support/Claude/claude_desktop_config.json`
@@ -142,6 +144,34 @@ npm run test:fixes           # 关键修复的回归测试
 **小贴士**：`-y` 会自动确认下载提示，便于在非交互环境中运行。若已通过 `npm install --global persistent-terminal-mcp`
 安装，可将 `command` 改为 `"persistent-terminal-mcp"` 并移除 `-y`。
 
+#### Windows
+**配置文件位置**: `%APPDATA%\Claude\mcp.json`（或 `claude_desktop_config.json`，具体取决于版本）
+
+```json
+{
+  "mcpServers": {
+    "persistent-terminal": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "-y",
+        "persistent-terminal-mcp"
+      ],
+      "env": {
+        "MAX_BUFFER_SIZE": "10000",
+        "SESSION_TIMEOUT": "86400000",
+        "COMPACT_ANIMATIONS": "true",
+        "ANIMATION_THROTTLE_MS": "100"
+      }
+    }
+  }
+}
+```
+
+**说明**：Windows 上需要通过 `cmd /c` 调用 `npx`，否则 JSON 配置会找不到可执行文件。若已全局安装，可将
+`args` 改为 `"persistent-terminal-mcp"` 并移除 `-y`。
+
 ### Claude Code (CLI 方式)
 使用命令行快速添加 MCP 服务器：
 
@@ -155,6 +185,10 @@ claude mcp add persistent-terminal \
 ```
 
 **提示**：首次使用 `npx` 时需要联网以便下载对应版本的包。
+
+> 📚 **Windows 用户**：命令行方式在 Windows 上可能因参数解析失败。请参考
+> [《Windows 下配置 persistent-terminal MCP》](docs/clients/claude-code-windows.md)
+> 获取推荐的项目级 `.mcp.json` 配置方法和脚本化全局配置方案。
 
 **示例**（全局安装后）：
 ```bash
@@ -185,6 +219,15 @@ MAX_BUFFER_SIZE = "10000"
 SESSION_TIMEOUT = "86400000"
 COMPACT_ANIMATIONS = "true"
 ANIMATION_THROTTLE_MS = "100"
+```
+
+**Windows 提示**：请改用 `command = "cmd"`，并将 `args` 调整为
+`["/c", "npx", "-y", "persistent-terminal-mcp"]`，否则 Codex CLI 可能无法找到 `npx`。
+
+```toml
+[mcp_servers.persistent-terminal]
+command = "cmd"
+args = ["/c", "npx", "-y", "persistent-terminal-mcp"]
 ```
 
 **提示**：首次执行 `npx persistent-terminal-mcp` 需保证可以访问 npm 注册表以下载依赖。

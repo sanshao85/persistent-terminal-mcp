@@ -1,11 +1,41 @@
 {
-  "mcpServers": {
-    "persistent-terminal": {
-      "command": "npx",
-      "args": ["-y", "persistent-terminal-mcp"],
-      "env": {
-        "MAX_BUFFER_SIZE": "10000",
-        "SESSION_TIMEOUT": "86400000"
+  "_notes": [
+    "Copy the section matching your operating system into your claude_desktop_config.json",
+    "Remove the other section(s) after merging so only one persistent-terminal entry remains"
+  ],
+  "macOS_linux": {
+    "mcpServers": {
+      "persistent-terminal": {
+        "command": "npx",
+        "args": [
+          "-y",
+          "persistent-terminal-mcp"
+        ],
+        "env": {
+          "MAX_BUFFER_SIZE": "10000",
+          "SESSION_TIMEOUT": "86400000",
+          "COMPACT_ANIMATIONS": "true",
+          "ANIMATION_THROTTLE_MS": "100"
+        }
+      }
+    }
+  },
+  "windows": {
+    "mcpServers": {
+      "persistent-terminal": {
+        "command": "cmd",
+        "args": [
+          "/c",
+          "npx",
+          "-y",
+          "persistent-terminal-mcp"
+        ],
+        "env": {
+          "MAX_BUFFER_SIZE": "10000",
+          "SESSION_TIMEOUT": "86400000",
+          "COMPACT_ANIMATIONS": "true",
+          "ANIMATION_THROTTLE_MS": "100"
+        }
       }
     }
   }

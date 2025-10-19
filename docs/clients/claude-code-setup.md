@@ -1,5 +1,9 @@
 # Claude Code MCP 配置指南
 
+> 💡 **Windows 用户**：命令行添加 MCP 时可能遇到 `-y` 参数解析问题。
+> 请参考 `docs/clients/claude-code-windows.md` 获取专属的项目级与全局
+> 配置教程。
+
 ## 📋 概述
 
 Claude Code 支持两种方式配置 MCP 服务器：
@@ -453,6 +457,8 @@ Claude Code 应该能够：
 
 ### 最小配置
 
+**macOS / Linux：**
+
 ```json
 {
   "mcpServers": {
@@ -463,15 +469,36 @@ Claude Code 应该能够：
         "-y",
         "persistent-terminal-mcp"
       ]
-}
-}
+    }
+  }
 }
 ```
 
-> **提示**：若已全局安装 `persistent-terminal-mcp`，可将 `command` 修改为
-> `persistent-terminal-mcp` 并删除 `-y` 参数。
+**Windows：**
+
+```json
+{
+  "mcpServers": {
+    "persistent-terminal": {
+      "type": "stdio",
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "-y",
+        "persistent-terminal-mcp"
+      ]
+    }
+  }
+}
+```
+
+> **提示**：若已全局安装 `persistent-terminal-mcp`，可将 `command`
+>（或在 Windows 中将 `args`）修改为直接调用可执行文件，并删除 `-y` 参数。
 
 ### 完整配置
+
+**macOS / Linux：**
 
 ```json
 {
@@ -480,6 +507,29 @@ Claude Code 应该能够：
       "type": "stdio",
       "command": "npx",
       "args": [
+        "-y",
+        "persistent-terminal-mcp"
+      ],
+      "env": {
+        "MAX_BUFFER_SIZE": "10000",
+        "SESSION_TIMEOUT": "86400000"
+      }
+    }
+  }
+}
+```
+
+**Windows：**
+
+```json
+{
+  "mcpServers": {
+    "persistent-terminal": {
+      "type": "stdio",
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
         "-y",
         "persistent-terminal-mcp"
       ],

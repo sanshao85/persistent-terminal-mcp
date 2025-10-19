@@ -81,7 +81,9 @@ npm run test:fixes           # regression tests for recent bug fixes
 
 ## MCP Client Configuration
 
-### Claude Desktop (macOS / Linux)
+### Claude Desktop
+
+#### macOS / Linux
 Add the following configuration to your MCP settings file:
 
 **Configuration file location**: `~/Library/Application Support/Claude/claude_desktop_config.json`
@@ -109,6 +111,34 @@ Add the following configuration to your MCP settings file:
 **Already installed?** If you installed the package globally, change `command` to
 `"persistent-terminal-mcp"` and remove the `-y` argument.
 
+#### Windows
+**Configuration file location**: `%APPDATA%\Claude\mcp.json` (or `claude_desktop_config.json` on older builds)
+
+```json
+{
+  "mcpServers": {
+    "persistent-terminal": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "-y",
+        "persistent-terminal-mcp"
+      ],
+      "env": {
+        "MAX_BUFFER_SIZE": "10000",
+        "SESSION_TIMEOUT": "86400000",
+        "COMPACT_ANIMATIONS": "true",
+        "ANIMATION_THROTTLE_MS": "100"
+      }
+    }
+  }
+}
+```
+
+**Windows note**: Wrapping `npx` with `cmd /c` ensures the executable is resolved correctly. If you installed the package globally,
+replace the arguments with `"persistent-terminal-mcp"` and omit `-y`.
+
 ### Claude Code (CLI Method)
 Use the command line to quickly add the MCP server:
 
@@ -122,6 +152,12 @@ claude mcp add persistent-terminal \
 ```
 
 **Tip**: The `-y` flag answers "yes" to the download prompt so the command can run non-interactively.
+
+> 📚 **Windows users**: Due to argument parsing quirks, `claude mcp add` may not
+> forward `-y` to `npx`. See
+> [Windows persistent-terminal MCP setup](docs/clients/claude-code-windows.md)
+> for the recommended project-level `.mcp.json` approach and an optional script
+> for updating `~/.claude.json`.
 
 **Example** (global install):
 ```bash
@@ -152,6 +188,14 @@ MAX_BUFFER_SIZE = "10000"
 SESSION_TIMEOUT = "86400000"
 COMPACT_ANIMATIONS = "true"
 ANIMATION_THROTTLE_MS = "100"
+```
+
+**Windows note**: Use `command = "cmd"` and `args = ["/c", "npx", "-y", "persistent-terminal-mcp"]` so Codex can launch `npx` correctly.
+
+```toml
+[mcp_servers.persistent-terminal]
+command = "cmd"
+args = ["/c", "npx", "-y", "persistent-terminal-mcp"]
 ```
 
 **Note**: Ensure the environment running `npx` has network access the first time so it can download the package if necessary.

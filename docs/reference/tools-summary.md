@@ -78,6 +78,8 @@ Total: 11
 
 ### 配置示例
 
+**macOS / Linux：**
+
 ```json
 {
   "mcpServers": {
@@ -93,8 +95,25 @@ Total: 11
 }
 ```
 
+**Windows：**
+
+```json
+{
+  "mcpServers": {
+    "persistent-terminal": {
+      "command": "cmd",
+      "args": ["/c", "npx", "-y", "persistent-terminal-mcp"],
+      "env": {
+        "MAX_BUFFER_SIZE": "10000",
+        "SESSION_TIMEOUT": "86400000"
+      }
+    }
+  }
+}
+```
+
 **重要提示：**
-1. 首次运行需要联网下载依赖；如已全局安装可改用 `persistent-terminal-mcp`
+1. 首次运行需要联网下载依赖；如已全局安装可改用 `persistent-terminal-mcp`（Windows 中调整 `args` 为单独的可执行名）
 2. 需要离线运行时，可退回到 `node dist/index.js` + 本地构建
 3. 修改配置后请重启 Claude Desktop
 

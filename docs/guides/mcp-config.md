@@ -109,7 +109,7 @@
 %APPDATA%\Claude\claude_desktop_config.json
 ```
 
-**配置内容：**
+**macOS / Linux 配置示例：**
 
 ```json
 {
@@ -126,9 +126,26 @@
 }
 ```
 
+**Windows 配置示例：**
+
+```json
+{
+  "mcpServers": {
+    "persistent-terminal": {
+      "command": "cmd",
+      "args": ["/c", "npx", "-y", "persistent-terminal-mcp"],
+      "env": {
+        "MAX_BUFFER_SIZE": "10000",
+        "SESSION_TIMEOUT": "86400000"
+      }
+    }
+  }
+}
+```
+
 > `-y` 会在首次执行时自动确认下载提示。如已全局安装
-> `persistent-terminal-mcp`，可将 `command` 改为 `persistent-terminal-mcp`
-> 并移除 `-y`。
+> `persistent-terminal-mcp`，可将 `command` 改为（或在 Windows 中将 `args`
+> 改为只包含）`persistent-terminal-mcp` 并移除 `-y`。
 
 ### 使用本地 dist 文件（备选）
 
