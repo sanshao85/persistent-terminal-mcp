@@ -6,6 +6,8 @@
 油管视频地址：https://youtu.be/nfLi1IZxhJs
 b站视频地址：https://www.bilibili.com/video/BV14ksPzqEbM/
 
+Windows 配置mcp 视频教程地址：https://youtu.be/WYEKwTQCAnc
+
 ## ✨ 核心特性
 
 ### 🔥 持久化终端会话
