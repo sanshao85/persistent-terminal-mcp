@@ -3,6 +3,8 @@
 [English](README.en.md)
 
 一个功能强大的 Model Context Protocol (MCP) 服务器，基于 TypeScript 和 [`node-pty`](https://github.com/microsoft/node-pty) 实现持久化终端会话管理。即使客户端断开连接，终端命令也会继续运行，特别适合 Claude、Cursor、Cline 等 AI 助手执行长时间任务。
+油管视频地址：https://youtu.be/nfLi1IZxhJs
+b站视频地址：https://www.bilibili.com/video/BV14ksPzqEbM/
 
 ## ✨ 核心特性
 
