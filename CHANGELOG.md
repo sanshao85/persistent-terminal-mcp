@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - _Nothing yet._
 
+## [1.0.5] - 2026-02-10
+
+### Fixed
+- 修复通过 `npx -y persistent-terminal-mcp` 运行 npm 包时，`create_terminal` 可能报错 `posix_spawnp failed` 的问题。
+- 根因是 `node-pty` 使用了宽松版本范围导致安装到 `1.1.0`，在部分 macOS 场景下会触发 PTY 创建失败。
+
+### Changed
+- 将 `node-pty` 依赖从 `^1.0.0` 锁定为 `1.0.0`，确保与源码环境一致、避免 npm 安装时漂移。
+
 ## [1.0.4] - 2026-02-10
 
 ### Fixed

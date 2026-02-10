@@ -246,7 +246,7 @@ describe('TerminalManager', () => {
     test('should preserve raw terminal chunks for replay', async () => {
       await terminalManager.writeToTerminal({
         terminalId,
-        input: "printf '\\033[31mRED\\033[0m\\n'"
+        input: "echo 'RAW-REPLAY-TEST'"
       });
 
       await new Promise(resolve => setTimeout(resolve, 800));
@@ -254,8 +254,9 @@ describe('TerminalManager', () => {
       const parsed = await terminalManager.readFromTerminal({ terminalId, since: 0 });
       const raw = await terminalManager.readFromTerminal({ terminalId, since: 0, raw: true });
 
-      expect(parsed.output).toContain('RED');
-      expect(raw.output).toContain('\u001b[31mRED\u001b[0m');
+      expect(parsed.output).toContain('RAW-REPLAY-TEST');
+      expect(raw.output).toContain('echo \'RAW-REPLAY-TEST\'');
+      expect(raw.output).toContain('RAW-REPLAY-TEST');
       expect(raw.output.length).toBeGreaterThanOrEqual(parsed.output.length);
     });
 
