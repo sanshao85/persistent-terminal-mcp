@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - _Nothing yet._
 
+## [1.0.4] - 2026-02-10
+
+### Fixed
+- 修复 Web UI 在反复打开终端详情页时的历史输出缺失问题，尤其是 `codex --yolo` 这类全屏 TUI 会话。
+- 修复 `codex --yolo` 在 PTY 中启动时报错 `The cursor position could not be read within a normal duration` 的问题，新增终端查询自动应答（如 `ESC[6n`）。
+
+### Added
+- `read_terminal` 新增 `raw` 参数：可读取原始 PTY 输出流，避免 ANSI 光标控制导致的历史回放丢失。
+- Web UI 详情页历史加载默认使用原始输出回放（`raw=true`），提升 Codex 会话历史可见性。
+- TerminalManager 新增原始输出缓冲与增量 cursor 读取能力，并补充对应单元测试。
+
+### Changed
+- 非 Windows 平台默认 shell 优先使用环境变量 `SHELL`，回退 `/bin/bash`，改善 macOS 下默认 shell 兼容性。
+
 ## [1.0.3] - 2025-10-18
 
 ### Fixed

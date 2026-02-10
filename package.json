@@ -1,6 +1,6 @@
 {
   "name": "persistent-terminal-mcp",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "MCP server for managing persistent terminal sessions using node-pty",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

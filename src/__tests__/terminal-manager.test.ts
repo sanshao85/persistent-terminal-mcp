@@ -201,6 +201,27 @@ describe('TerminalManager', () => {
       (terminalManager as any).sessions.delete(fakeId);
     });
 
+    test('should generate cursor position reply for terminal query', () => {
+      const manager = terminalManager as any;
+      const replies = manager.collectTerminalReplies('query-terminal', `prefix\u001b[6n`);
+
+      expect(replies).toEqual(['\u001b[1;1R']);
+      expect(manager.terminalQueryRemainders.has('query-terminal')).toBe(false);
+    });
+
+    test('should handle split terminal query chunks across events', () => {
+      const manager = terminalManager as any;
+      const terminalId = 'split-query-terminal';
+
+      const firstReplies = manager.collectTerminalReplies(terminalId, '\u001b[');
+      expect(firstReplies).toEqual([]);
+      expect(manager.terminalQueryRemainders.get(terminalId)).toBe('\u001b[');
+
+      const secondReplies = manager.collectTerminalReplies(terminalId, '6n');
+      expect(secondReplies).toEqual(['\u001b[1;1R']);
+      expect(manager.terminalQueryRemainders.has(terminalId)).toBe(false);
+    });
+
     test('should read from terminal', async () => {
       // Send a command
       await terminalManager.writeToTerminal({
@@ -220,6 +241,22 @@ describe('TerminalManager', () => {
       expect(typeof result.cursor).toBe('number');
       expect(result.status).toBeDefined();
       expect(typeof result.status?.isRunning).toBe('boolean');
+    });
+
+    test('should preserve raw terminal chunks for replay', async () => {
+      await terminalManager.writeToTerminal({
+        terminalId,
+        input: "printf '\\033[31mRED\\033[0m\\n'"
+      });
+
+      await new Promise(resolve => setTimeout(resolve, 800));
+
+      const parsed = await terminalManager.readFromTerminal({ terminalId, since: 0 });
+      const raw = await terminalManager.readFromTerminal({ terminalId, since: 0, raw: true });
+
+      expect(parsed.output).toContain('RED');
+      expect(raw.output).toContain('\u001b[31mRED\u001b[0m');
+      expect(raw.output.length).toBeGreaterThanOrEqual(parsed.output.length);
     });
 
     test('should list terminals', async () => {

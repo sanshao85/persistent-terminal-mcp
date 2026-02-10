@@ -1,5 +1,5 @@
 import { EventEmitter } from 'events';
-import { TerminalSession, TerminalCreateOptions, TerminalWriteOptions, TerminalReadOptions, TerminalReadResult, TerminalListResult, TerminalManagerConfig, TerminalStatsResult } from './types.js';
+import { TerminalSession, TerminalCreateOptions, TerminalWriteOptions, TerminalReadOptions, TerminalReadResult, TerminalListResult, TerminalManagerConfig, TerminalStatsResult, TerminalRawReadOptions, TerminalRawReadResult } from './types.js';
 /**
  * 终端会话管理器
  * 负责创建、管理和维护持久化的终端会话
@@ -10,6 +10,11 @@ export declare class TerminalManager extends EventEmitter {
     private outputBuffers;
     private exitPromises;
     private exitResolvers;
+    private terminalQueryRemainders;
+    private rawOutputBuffers;
+    private rawSequenceCounters;
+    private rawBufferMaxChunks;
+    private rawBufferMaxBytes;
     private config;
     private cleanupTimer;
     constructor(config?: TerminalManagerConfig);
@@ -27,6 +32,7 @@ export declare class TerminalManager extends EventEmitter {
      * 从终端读取输出
      */
     readFromTerminal(options: TerminalReadOptions): Promise<TerminalReadResult>;
+    readRawFromTerminal(options: TerminalRawReadOptions): TerminalRawReadResult;
     /**
      * 获取终端统计信息
      */
@@ -89,5 +95,11 @@ export declare class TerminalManager extends EventEmitter {
     private isMostlyPrintable;
     private isPromptLine;
     private buildReadStatus;
+    private resolveDefaultShell;
+    private collectTerminalReplies;
+    private getTerminalQueryDefinitions;
+    private isPartialQuerySequence;
+    private extractQueryRemainder;
+    private appendRawOutputChunk;
 }
 //# sourceMappingURL=terminal-manager.d.ts.map

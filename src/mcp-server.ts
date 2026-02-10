@@ -19,7 +19,8 @@ import {
   KillTerminalResult,
   TerminalStatsInput,
   TerminalStatsResult,
-  TerminalCreateOptions
+  TerminalCreateOptions,
+  TerminalReadOptions
 } from './types.js';
 import { promises as fs } from 'fs';
 import * as path from 'path';
@@ -503,14 +504,20 @@ Fix tool: OpenAI Codex
       },
       async ({ terminalId, since, maxLines, mode, headLines, tailLines, stripSpinner }): Promise<CallToolResult> => {
         try {
-          const result = await this.terminalManager.readFromTerminal({
+          const shouldUseRawRead = this.shouldUseRawRead(mode, headLines, tailLines);
+          const readOptions: TerminalReadOptions = {
             terminalId,
             since: since || undefined,
             maxLines: maxLines || undefined,
             mode: mode || undefined,
             headLines: headLines || undefined,
             tailLines: tailLines || undefined,
-            stripSpinner: stripSpinner
+            stripSpinner: stripSpinner,
+            raw: shouldUseRawRead
+          };
+
+          const result = await this.terminalManager.readFromTerminal({
+            ...readOptions
           });
 
           let outputText = `Terminal Output (${terminalId}):\n\n${result.output}\n\n--- End of Output ---\n`;
@@ -520,6 +527,10 @@ Fix tool: OpenAI Codex
 
           if (result.truncated) {
             outputText += `\nTruncated: Yes`;
+          }
+
+          if (shouldUseRawRead) {
+            outputText += `\nRaw Replay: Enabled (TUI-safe)`;
           }
 
           if (result.stats) {
@@ -954,6 +965,22 @@ The more detailed, the better the fix!`),
         return await this.fixBugWithCodex(params);
       }
     );
+  }
+
+  private shouldUseRawRead(mode?: 'full' | 'head' | 'tail' | 'head-tail', headLines?: number, tailLines?: number): boolean {
+    if (!mode || mode === 'full') {
+      return true;
+    }
+
+    if (mode === 'tail' && tailLines && tailLines <= 200) {
+      return false;
+    }
+
+    if (mode === 'head' && headLines && headLines <= 200) {
+      return false;
+    }
+
+    return true;
   }
 
   /**

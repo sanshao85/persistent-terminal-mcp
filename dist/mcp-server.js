@@ -416,14 +416,19 @@ Fix tool: OpenAI Codex
             readOnlyHint: true
         }, async ({ terminalId, since, maxLines, mode, headLines, tailLines, stripSpinner }) => {
             try {
-                const result = await this.terminalManager.readFromTerminal({
+                const shouldUseRawRead = this.shouldUseRawRead(mode, headLines, tailLines);
+                const readOptions = {
                     terminalId,
                     since: since || undefined,
                     maxLines: maxLines || undefined,
                     mode: mode || undefined,
                     headLines: headLines || undefined,
                     tailLines: tailLines || undefined,
-                    stripSpinner: stripSpinner
+                    stripSpinner: stripSpinner,
+                    raw: shouldUseRawRead
+                };
+                const result = await this.terminalManager.readFromTerminal({
+                    ...readOptions
                 });
                 let outputText = `Terminal Output (${terminalId}):\n\n${result.output}\n\n--- End of Output ---\n`;
                 outputText += `Total Lines: ${result.totalLines}\n`;
@@ -431,6 +436,9 @@ Fix tool: OpenAI Codex
                 outputText += `Next Read Cursor: ${result.cursor ?? result.since}`;
                 if (result.truncated) {
                     outputText += `\nTruncated: Yes`;
+                }
+                if (shouldUseRawRead) {
+                    outputText += `\nRaw Replay: Enabled (TUI-safe)`;
                 }
                 if (result.stats) {
                     outputText += `\n\nStatistics:`;
@@ -810,6 +818,18 @@ The more detailed, the better the fix!`),
                 params.timeout = timeout;
             return await this.fixBugWithCodex(params);
         });
+    }
+    shouldUseRawRead(mode, headLines, tailLines) {
+        if (!mode || mode === 'full') {
+            return true;
+        }
+        if (mode === 'tail' && tailLines && tailLines <= 200) {
+            return false;
+        }
+        if (mode === 'head' && headLines && headLines <= 200) {
+            return false;
+        }
+        return true;
     }
     /**
      * 设置 MCP 资源

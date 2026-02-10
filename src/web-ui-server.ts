@@ -155,13 +155,14 @@ export class WebUIServer {
           res.status(400).json({ error: 'Terminal ID is required' });
           return;
         }
-        const { since, maxLines, mode } = req.query;
+        const { since, maxLines, mode, raw } = req.query;
 
         const result = await this.terminalManager.readFromTerminal({
           terminalId: id,
           since: since ? parseInt(since as string) : undefined,
           maxLines: maxLines ? parseInt(maxLines as string) : undefined,
-          mode: mode as any
+          mode: mode as any,
+          raw: raw === 'true' || raw === '1'
         });
 
         res.json(result);
@@ -358,4 +359,3 @@ export class WebUIServer {
     });
   }
 }
-

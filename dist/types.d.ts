@@ -41,6 +41,7 @@ export interface TerminalReadOptions {
     headLines?: number | undefined;
     tailLines?: number | undefined;
     stripSpinner?: boolean | undefined;
+    raw?: boolean | undefined;
 }
 export interface TerminalReadResult {
     output: string;
@@ -56,6 +57,19 @@ export interface TerminalReadResult {
         linesOmitted: number;
     };
     status?: TerminalReadStatus;
+}
+export interface TerminalRawReadOptions {
+    terminalId: string;
+    since?: number | undefined;
+    maxChunks?: number | undefined;
+    maxBytes?: number | undefined;
+}
+export interface TerminalRawReadResult {
+    output: string;
+    hasMore: boolean;
+    cursor: number;
+    chunkCount: number;
+    truncated: boolean;
 }
 export interface TerminalReadStatus {
     isRunning: boolean;

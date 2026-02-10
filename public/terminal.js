@@ -162,7 +162,7 @@ async function loadTerminalInfo() {
 async function loadTerminalOutput() {
   try {
     console.log('Loading terminal output for:', terminalId);
-    const response = await fetch(`/api/terminals/${terminalId}/output?since=${currentCursor}`);
+    const response = await fetch(`/api/terminals/${terminalId}/output?since=${currentCursor}&raw=true`);
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -241,4 +241,3 @@ function updateStatus(status) {
   badge.textContent = status;
   badge.className = 'status-badge status-' + status;
 }
-

@@ -85,6 +85,7 @@ console.log(`Web UI 已启动: ${result.url}`);
 - 🖥️ **终端输出**: 使用 xterm.js 渲染，支持 ANSI 颜色
 - ⚡ **实时更新**: WebSocket 推送，输出实时显示
 - ⌨️ **命令输入**: 在输入框中输入命令并发送
+- 🧾 **历史回放保真**: 详情页历史加载使用原始 PTY 输出流（raw replay），对 Codex 等全屏 TUI 更友好
 - 📊 **终端信息**: 显示 PID、Shell、工作目录、创建时间
 - 🎨 **状态标签**: 实时显示终端状态
 
@@ -199,7 +200,7 @@ PTY Processes
 - `GET /api/terminals` - 获取所有终端
 - `GET /api/terminals/:id` - 获取终端详情
 - `POST /api/terminals` - 创建终端
-- `GET /api/terminals/:id/output` - 读取终端输出
+- `GET /api/terminals/:id/output` - 读取终端输出（支持 `raw=true` 原始回放）
 - `POST /api/terminals/:id/input` - 发送命令
 - `DELETE /api/terminals/:id` - 终止终端
 - `GET /api/terminals/:id/stats` - 获取统计信息
@@ -247,4 +248,3 @@ PTY Processes
 - 查看 [Web UI 功能文档](../features/WEB_UI_FEATURE.md) 了解技术细节
 - 查看 [API 文档](../reference/API.md) 了解 REST API
 - 查看 [故障排查指南](TROUBLESHOOTING.md) 解决问题
-

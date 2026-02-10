@@ -309,7 +309,7 @@ await server.connect(/* 自定义 transport */);
 | `create_terminal` | 创建持久终端会话 | `shell`, `cwd`, `env`, `cols`, `rows` |
 | `create_terminal_basic` | 精简版创建入口 | `shell`, `cwd` |
 | `write_terminal` | 向终端写入命令 | `terminalId`, `input`, `appendNewline` |
-| `read_terminal` | 读取缓冲输出 | `terminalId`, `mode`, `since`, `stripSpinner` |
+| `read_terminal` | 读取缓冲输出 | `terminalId`, `mode`, `since`, `stripSpinner`, `raw` |
 | `wait_for_output` | 等待输出稳定 | `terminalId`, `timeout`, `stableTime` |
 | `get_terminal_stats` | 查看统计信息 | `terminalId` |
 | `list_terminals` | 列出所有活跃终端 | 无 |
@@ -361,6 +361,7 @@ await server.connect(/* 自定义 transport */);
 - `headLines` (可选): head 模式的行数，默认 50
 - `tailLines` (可选): tail 模式的行数，默认 50
 - `stripSpinner` (可选): 是否压缩 Spinner 动画
+- `raw` (可选): 是否读取原始 PTY 输出流（适合 Codex/vim 等 TUI，避免历史回放丢失）
 
 **返回**：
 - `output`: 输出内容
@@ -553,6 +554,7 @@ AI 助手：
 - 🖥️ **实时终端**：使用 xterm.js 渲染终端输出，支持 ANSI 颜色
 - ⚡ **实时更新**：WebSocket 推送，终端输出实时显示
 - ⌨️ **交互操作**：直接在浏览器中发送命令
+- 🧾 **历史保真**：终端详情页历史加载默认使用原始 PTY 回放，改善 Codex 对话历史缺失
 - 🎨 **VS Code 风格**：暗色主题，简洁美观
 - 🔄 **自动端口**：支持多实例，自动避免端口冲突
 

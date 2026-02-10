@@ -12,7 +12,9 @@ import {
   TerminalError,
   TerminalStatsResult,
   TerminalReadStatus,
-  CommandRuntimeInfo
+  CommandRuntimeInfo,
+  TerminalRawReadOptions,
+  TerminalRawReadResult
 } from './types.js';
 import { OutputBuffer } from './output-buffer.js';
 import { OutputBufferEntry } from './types.js';
@@ -27,6 +29,11 @@ export class TerminalManager extends EventEmitter {
   private outputBuffers = new Map<string, OutputBuffer>();
   private exitPromises = new Map<string, Promise<void>>();
   private exitResolvers = new Map<string, () => void>();
+  private terminalQueryRemainders = new Map<string, string>();
+  private rawOutputBuffers = new Map<string, Array<{ sequence: number; chunk: string }>>();
+  private rawSequenceCounters = new Map<string, number>();
+  private rawBufferMaxChunks = 6000;
+  private rawBufferMaxBytes = 2 * 1024 * 1024;
   private config: Required<TerminalManagerConfig>;
   private cleanupTimer: NodeJS.Timeout;
 
@@ -36,7 +43,7 @@ export class TerminalManager extends EventEmitter {
     this.config = {
       maxBufferSize: config.maxBufferSize || 10000,
       sessionTimeout: config.sessionTimeout || 24 * 60 * 60 * 1000, // 24 hours
-      defaultShell: config.defaultShell || (process.platform === 'win32' ? 'powershell.exe' : '/bin/bash'),
+      defaultShell: this.resolveDefaultShell(config.defaultShell),
       defaultCols: config.defaultCols || 80,
       defaultRows: config.defaultRows || 24,
       compactAnimations: config.compactAnimations ?? true,
@@ -129,6 +136,18 @@ export class TerminalManager extends EventEmitter {
         setImmediate(() => {
           const now = new Date();
           session.lastActivity = now;
+
+          this.appendRawOutputChunk(terminalId, data);
+
+          const terminalReplies = this.collectTerminalReplies(terminalId, data);
+          for (const reply of terminalReplies) {
+            try {
+              ptyProcess.write(reply);
+            } catch {
+              // 忽略终端应答失败，避免影响主输出流程
+            }
+          }
+
           outputBuffer.append(data);
           this.emit('terminalOutput', terminalId, data);
         });
@@ -159,6 +178,8 @@ export class TerminalManager extends EventEmitter {
       this.sessions.set(terminalId, session);
       this.ptyProcesses.set(terminalId, ptyProcess);
       this.outputBuffers.set(terminalId, outputBuffer);
+      this.rawOutputBuffers.set(terminalId, []);
+      this.rawSequenceCounters.set(terminalId, 0);
 
       this.emit('terminalCreated', terminalId, session);
       
@@ -274,7 +295,7 @@ export class TerminalManager extends EventEmitter {
    * 从终端读取输出
    */
   async readFromTerminal(options: TerminalReadOptions): Promise<TerminalReadResult> {
-    const { terminalId, since = 0, maxLines = 1000, mode, headLines, tailLines } = options;
+    const { terminalId, since = 0, maxLines = 1000, mode, headLines, tailLines, raw } = options;
 
     const outputBuffer = this.outputBuffers.get(terminalId);
     const session = this.sessions.get(terminalId);
@@ -290,6 +311,26 @@ export class TerminalManager extends EventEmitter {
       // 给一个很小的延迟，确保 onData 事件中的数据已经被处理
       // 这解决了"读取到旧数据"的问题
       await new Promise(resolve => setImmediate(resolve));
+
+      if (raw) {
+        const rawChunkLimit = options.maxLines ?? 6000;
+        const rawResult = this.readRawFromTerminal({
+          terminalId,
+          since,
+          maxChunks: rawChunkLimit,
+          maxBytes: 4 * 1024 * 1024
+        });
+
+        return {
+          output: rawResult.output,
+          totalLines: outputBuffer.getStats().totalLines,
+          hasMore: rawResult.hasMore,
+          since: rawResult.cursor,
+          cursor: rawResult.cursor,
+          truncated: rawResult.truncated,
+          status: this.buildReadStatus(session)
+        };
+      }
       // 如果指定了智能读取模式，使用新的 readSmart 方法
       const cursorPosition = since ?? 0;
 
@@ -350,6 +391,70 @@ export class TerminalManager extends EventEmitter {
       terminalError.terminalId = terminalId;
       throw terminalError;
     }
+  }
+
+  readRawFromTerminal(options: TerminalRawReadOptions): TerminalRawReadResult {
+    const {
+      terminalId,
+      since = 0,
+      maxChunks = 1000,
+      maxBytes = 1024 * 1024
+    } = options;
+
+    const rawBuffer = this.rawOutputBuffers.get(terminalId);
+    const session = this.sessions.get(terminalId);
+
+    if (!rawBuffer || !session) {
+      const error: TerminalError = new Error(`Terminal ${terminalId} not found`) as TerminalError;
+      error.code = 'TERMINAL_NOT_FOUND';
+      error.terminalId = terminalId;
+      throw error;
+    }
+
+    const available = rawBuffer.filter(entry => entry.sequence > since);
+    if (available.length === 0) {
+      return {
+        output: '',
+        hasMore: false,
+        cursor: since,
+        chunkCount: 0,
+        truncated: false
+      };
+    }
+
+    const normalizedChunkLimit = maxChunks > 0 ? maxChunks : available.length;
+    const selectedByCount = available.length > normalizedChunkLimit
+      ? available.slice(-normalizedChunkLimit)
+      : available;
+
+    const normalizedByteLimit = maxBytes > 0 ? maxBytes : Number.MAX_SAFE_INTEGER;
+    const selected: Array<{ sequence: number; chunk: string }> = [];
+    let totalBytes = 0;
+
+    for (let i = selectedByCount.length - 1; i >= 0; i--) {
+      const candidate = selectedByCount[i]!;
+      const size = Buffer.byteLength(candidate.chunk, 'utf8');
+      if (selected.length > 0 && totalBytes + size > normalizedByteLimit) {
+        break;
+      }
+      selected.push(candidate);
+      totalBytes += size;
+    }
+
+    selected.reverse();
+
+    const output = selected.map(entry => entry.chunk).join('');
+    const cursor = selected.length > 0 ? selected[selected.length - 1]!.sequence : since;
+    const hasMore = available.length > selected.length;
+    const truncated = hasMore || selectedByCount.length < available.length;
+
+    return {
+      output,
+      hasMore,
+      cursor,
+      chunkCount: selected.length,
+      truncated
+    };
   }
 
   /**
@@ -561,6 +666,9 @@ export class TerminalManager extends EventEmitter {
     this.sessions.delete(terminalId);
     this.exitPromises.delete(terminalId);
     this.exitResolvers.delete(terminalId);
+    this.terminalQueryRemainders.delete(terminalId);
+    this.rawOutputBuffers.delete(terminalId);
+    this.rawSequenceCounters.delete(terminalId);
     this.emit('terminalCleaned', terminalId);
   }
 
@@ -822,5 +930,140 @@ export class TerminalManager extends EventEmitter {
       promptLine: session.lastPromptLine ?? null,
       lastActivity: session.lastActivity.toISOString()
     };
+  }
+
+  private resolveDefaultShell(configuredShell?: string): string {
+    if (configuredShell?.trim()) {
+      return configuredShell;
+    }
+
+    if (process.platform === 'win32') {
+      return 'powershell.exe';
+    }
+
+    const envShell = process.env.SHELL?.trim();
+    if (envShell) {
+      return envShell;
+    }
+
+    return '/bin/bash';
+  }
+
+  private collectTerminalReplies(terminalId: string, chunk: string): string[] {
+    if (!chunk) {
+      return [];
+    }
+
+    const queries = this.getTerminalQueryDefinitions();
+    const knownSequences = queries.map(query => query.sequence);
+    const previousRemainder = this.terminalQueryRemainders.get(terminalId) ?? '';
+    const combined = previousRemainder + chunk;
+    const replies: string[] = [];
+
+    let index = 0;
+    while (index < combined.length) {
+      const escapeIndex = combined.indexOf('\u001b[', index);
+      if (escapeIndex === -1) {
+        break;
+      }
+
+      let matched = false;
+      for (const query of queries) {
+        if (combined.startsWith(query.sequence, escapeIndex)) {
+          replies.push(query.reply);
+          index = escapeIndex + query.sequence.length;
+          matched = true;
+          break;
+        }
+      }
+
+      if (matched) {
+        continue;
+      }
+
+      const maybePartial = combined.slice(escapeIndex);
+      if (this.isPartialQuerySequence(maybePartial, knownSequences)) {
+        this.terminalQueryRemainders.set(terminalId, maybePartial);
+        return replies;
+      }
+
+      index = escapeIndex + 1;
+    }
+
+    const remainder = this.extractQueryRemainder(combined, knownSequences);
+    if (remainder) {
+      this.terminalQueryRemainders.set(terminalId, remainder);
+    } else {
+      this.terminalQueryRemainders.delete(terminalId);
+    }
+
+    return replies;
+  }
+
+  private getTerminalQueryDefinitions(): Array<{ sequence: string; reply: string }> {
+    return [
+      // Cursor Position Report (CPR)
+      { sequence: '\u001b[6n', reply: '\u001b[1;1R' },
+      // Device Status Report
+      { sequence: '\u001b[5n', reply: '\u001b[0n' },
+      // Primary Device Attributes (DA1)
+      { sequence: '\u001b[c', reply: '\u001b[?1;2c' },
+      // Secondary Device Attributes (DA2)
+      { sequence: '\u001b[>c', reply: '\u001b[>0;95;0c' }
+    ];
+  }
+
+  private isPartialQuerySequence(candidate: string, sequences: string[]): boolean {
+    if (!candidate) {
+      return false;
+    }
+
+    return sequences.some(sequence =>
+      sequence.startsWith(candidate) && candidate.length < sequence.length
+    );
+  }
+
+  private extractQueryRemainder(value: string, sequences: string[]): string {
+    if (!value) {
+      return '';
+    }
+
+    const longestSequenceLength = sequences.reduce((max, sequence) => {
+      return Math.max(max, sequence.length - 1);
+    }, 0);
+
+    const maxSuffixLength = Math.min(longestSequenceLength, value.length);
+    for (let len = maxSuffixLength; len > 0; len--) {
+      const suffix = value.slice(-len);
+      if (this.isPartialQuerySequence(suffix, sequences)) {
+        return suffix;
+      }
+    }
+
+    return '';
+  }
+
+  private appendRawOutputChunk(terminalId: string, chunk: string): void {
+    if (!chunk) {
+      return;
+    }
+
+    const list = this.rawOutputBuffers.get(terminalId);
+    if (!list) {
+      return;
+    }
+
+    const nextSeq = (this.rawSequenceCounters.get(terminalId) ?? 0) + 1;
+    this.rawSequenceCounters.set(terminalId, nextSeq);
+    list.push({ sequence: nextSeq, chunk });
+
+    let totalBytes = 0;
+    for (let i = list.length - 1; i >= 0; i--) {
+      totalBytes += Buffer.byteLength(list[i]!.chunk, 'utf8');
+      if (list.length - i > this.rawBufferMaxChunks || totalBytes > this.rawBufferMaxBytes) {
+        list.splice(0, i + 1);
+        break;
+      }
+    }
   }
 }
