@@ -175,6 +175,9 @@ export interface ReadTerminalInput {
   headLines?: number;
   tailLines?: number;
   stripSpinner?: boolean;
+  raw?: boolean;
+  cleanAnsi?: boolean;
+  maxChars?: number;
 }
 
 export interface TerminalStatsInput {

@@ -410,13 +410,16 @@ Fix tool: OpenAI Codex
             mode: z.enum(['full', 'head', 'tail', 'head-tail']).optional().describe('Reading mode: full (default), head (first N lines), tail (last N lines), or head-tail (first + last N lines)'),
             headLines: z.number().optional().describe('Number of lines to show from the beginning when using head or head-tail mode (default: 50)'),
             tailLines: z.number().optional().describe('Number of lines to show from the end when using tail or head-tail mode (default: 50)'),
-            stripSpinner: z.boolean().optional().describe('Whether to strip spinner/animation frames (uses global setting if not specified)')
+            stripSpinner: z.boolean().optional().describe('Whether to strip spinner/animation frames (uses global setting if not specified)'),
+            raw: z.boolean().optional().describe('Read raw PTY stream (TUI-safe but may be noisy). Default: false'),
+            cleanAnsi: z.boolean().optional().describe('When raw=true, sanitize ANSI/control sequences into readable text. Default: true'),
+            maxChars: z.number().optional().describe('Maximum characters returned in this tool response (default: 12000, hard cap for context safety)')
         }, {
             title: 'Read Terminal Output',
             readOnlyHint: true
-        }, async ({ terminalId, since, maxLines, mode, headLines, tailLines, stripSpinner }) => {
+        }, async ({ terminalId, since, maxLines, mode, headLines, tailLines, stripSpinner, raw, cleanAnsi, maxChars }) => {
             try {
-                const shouldUseRawRead = this.shouldUseRawRead(mode, headLines, tailLines);
+                const useRawRead = raw === true;
                 const readOptions = {
                     terminalId,
                     since: since || undefined,
@@ -425,20 +428,34 @@ Fix tool: OpenAI Codex
                     headLines: headLines || undefined,
                     tailLines: tailLines || undefined,
                     stripSpinner: stripSpinner,
-                    raw: shouldUseRawRead
+                    raw: useRawRead
                 };
                 const result = await this.terminalManager.readFromTerminal({
                     ...readOptions
                 });
-                let outputText = `Terminal Output (${terminalId}):\n\n${result.output}\n\n--- End of Output ---\n`;
+                const originalOutput = result.output ?? '';
+                const cleanedOutput = useRawRead && cleanAnsi !== false
+                    ? this.sanitizeRawTerminalOutput(originalOutput)
+                    : originalOutput;
+                const charLimit = this.resolveReadMaxChars(maxChars);
+                const truncation = this.truncateForContext(cleanedOutput, charLimit);
+                const finalOutput = truncation.output;
+                let outputText = `Terminal Output (${terminalId}):\n\n${finalOutput}\n\n--- End of Output ---\n`;
                 outputText += `Total Lines: ${result.totalLines}\n`;
                 outputText += `Has More: ${result.hasMore}\n`;
                 outputText += `Next Read Cursor: ${result.cursor ?? result.since}`;
+                outputText += `\nReturned Chars: ${finalOutput.length}`;
+                outputText += `\nOriginal Chars: ${originalOutput.length}`;
                 if (result.truncated) {
                     outputText += `\nTruncated: Yes`;
                 }
-                if (shouldUseRawRead) {
+                if (useRawRead) {
                     outputText += `\nRaw Replay: Enabled (TUI-safe)`;
+                    outputText += `\nANSI Cleanup: ${cleanAnsi === false ? 'Disabled' : 'Enabled'}`;
+                }
+                if (truncation.truncated) {
+                    outputText += `\nContext Guard: Truncated to ${charLimit} chars (omitted ${truncation.omittedChars} chars)`;
+                    outputText += `\nHint: Use since=${result.cursor ?? result.since} for incremental reads, or switch mode="tail" with tailLines.`;
                 }
                 if (result.stats) {
                     outputText += `\n\nStatistics:`;
@@ -819,17 +836,138 @@ The more detailed, the better the fix!`),
             return await this.fixBugWithCodex(params);
         });
     }
-    shouldUseRawRead(mode, headLines, tailLines) {
-        if (!mode || mode === 'full') {
-            return true;
+    resolveReadMaxChars(maxChars) {
+        const envLimit = parseInt(process.env.READ_TERMINAL_MAX_CHARS || '12000', 10);
+        const safeEnvLimit = Number.isFinite(envLimit) && envLimit > 0 ? envLimit : 12000;
+        if (!maxChars || maxChars <= 0) {
+            return safeEnvLimit;
         }
-        if (mode === 'tail' && tailLines && tailLines <= 200) {
-            return false;
+        // Hard upper bound to avoid flooding model context
+        return Math.min(maxChars, 50000);
+    }
+    truncateForContext(output, maxChars) {
+        if (!output || output.length <= maxChars) {
+            return {
+                output,
+                truncated: false,
+                omittedChars: 0
+            };
         }
-        if (mode === 'head' && headLines && headLines <= 200) {
-            return false;
+        const headLength = Math.max(200, Math.floor(maxChars * 0.55));
+        const tailLength = Math.max(200, maxChars - headLength - 64);
+        const start = output.slice(0, headLength);
+        const end = output.slice(-tailLength);
+        const omittedChars = Math.max(0, output.length - headLength - tailLength);
+        return {
+            output: `${start}\n\n... [省略 ${omittedChars} 字符] ...\n\n${end}`,
+            truncated: true,
+            omittedChars
+        };
+    }
+    sanitizeRawTerminalOutput(raw) {
+        if (!raw) {
+            return raw;
         }
-        return true;
+        const lines = [];
+        let currentLine = '';
+        for (let i = 0; i < raw.length; i++) {
+            const char = raw[i];
+            if (char === '\u001b') {
+                i = this.skipAnsiSequence(raw, i);
+                continue;
+            }
+            if (char === '\r') {
+                currentLine = '';
+                continue;
+            }
+            if (char === '\n') {
+                lines.push(currentLine);
+                currentLine = '';
+                continue;
+            }
+            if (char === '\b') {
+                currentLine = currentLine.slice(0, -1);
+                continue;
+            }
+            const code = char.charCodeAt(0);
+            if (code < 32 && code !== 9) {
+                continue;
+            }
+            currentLine += char;
+        }
+        if (currentLine) {
+            lines.push(currentLine);
+        }
+        const compacted = [];
+        let previous = '';
+        let repeatCount = 0;
+        const flushRepeatSummary = () => {
+            if (repeatCount > 2) {
+                compacted.push(`... [重复 ${repeatCount - 2} 行已折叠] ...`);
+            }
+        };
+        for (const rawLine of lines) {
+            const line = rawLine.replace(/[\t ]+$/g, '');
+            if (line === previous) {
+                repeatCount++;
+                if (repeatCount <= 2) {
+                    compacted.push(line);
+                }
+                continue;
+            }
+            flushRepeatSummary();
+            previous = line;
+            repeatCount = 1;
+            compacted.push(line);
+        }
+        flushRepeatSummary();
+        const collapsedBlanks = [];
+        let blankCount = 0;
+        for (const line of compacted) {
+            if (line.trim().length === 0) {
+                blankCount++;
+                if (blankCount <= 2) {
+                    collapsedBlanks.push('');
+                }
+                continue;
+            }
+            blankCount = 0;
+            collapsedBlanks.push(line);
+        }
+        return collapsedBlanks.join('\n').trim();
+    }
+    skipAnsiSequence(input, startIndex) {
+        let index = startIndex + 1;
+        if (index >= input.length) {
+            return startIndex;
+        }
+        const next = input[index];
+        if (next === '[') {
+            index++;
+            while (index < input.length) {
+                const ch = input[index];
+                if (ch >= '@' && ch <= '~') {
+                    return index;
+                }
+                index++;
+            }
+            return input.length - 1;
+        }
+        if (next === ']') {
+            index++;
+            while (index < input.length) {
+                const ch = input[index];
+                if (ch === '\u0007') {
+                    return index;
+                }
+                if (ch === '\u001b' && input[index + 1] === '\\') {
+                    return index + 1;
+                }
+                index++;
+            }
+            return input.length - 1;
+        }
+        return index;
     }
     /**
      * 设置 MCP 资源

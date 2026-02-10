@@ -21,7 +21,10 @@ export declare class PersistentTerminalMcpServer {
      * 设置 MCP 工具
      */
     private setupTools;
-    private shouldUseRawRead;
+    private resolveReadMaxChars;
+    private truncateForContext;
+    private sanitizeRawTerminalOutput;
+    private skipAnsiSequence;
     /**
      * 设置 MCP 资源
      */

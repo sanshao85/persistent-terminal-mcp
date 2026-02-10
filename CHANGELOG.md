@@ -7,7 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- _Nothing yet._
+## [1.0.6] - 2026-02-10
+
+### Changed
+- `read_terminal` 新增 `raw`、`cleanAnsi`、`maxChars` 参数，默认返回更适合 LLM 上下文的可读输出。
+- `read_terminal` 默认不再自动启用 raw 重放，避免 full 模式下把大量 TUI 控制流直接塞进上下文。
+
+### Improved
+- 当 `raw=true` 时，默认执行 ANSI 清洗、控制字符过滤与重复刷屏折叠，显著降低 Codex/TUI 输出噪音。
+- 新增单次响应字符保护（context guard），超长输出会自动截断并附带明确提示与增量读取建议。
 
 ## [1.0.5] - 2026-02-10
 

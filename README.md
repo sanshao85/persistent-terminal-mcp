@@ -309,7 +309,7 @@ await server.connect(/* 自定义 transport */);
 | `create_terminal` | 创建持久终端会话 | `shell`, `cwd`, `env`, `cols`, `rows` |
 | `create_terminal_basic` | 精简版创建入口 | `shell`, `cwd` |
 | `write_terminal` | 向终端写入命令 | `terminalId`, `input`, `appendNewline` |
-| `read_terminal` | 读取缓冲输出 | `terminalId`, `mode`, `since`, `stripSpinner`, `raw` |
+| `read_terminal` | 读取缓冲输出 | `terminalId`, `mode`, `since`, `stripSpinner`, `raw`, `cleanAnsi`, `maxChars` |
 | `wait_for_output` | 等待输出稳定 | `terminalId`, `timeout`, `stableTime` |
 | `get_terminal_stats` | 查看统计信息 | `terminalId` |
 | `list_terminals` | 列出所有活跃终端 | 无 |
@@ -362,6 +362,8 @@ await server.connect(/* 自定义 transport */);
 - `tailLines` (可选): tail 模式的行数，默认 50
 - `stripSpinner` (可选): 是否压缩 Spinner 动画
 - `raw` (可选): 是否读取原始 PTY 输出流（适合 Codex/vim 等 TUI，避免历史回放丢失）
+- `cleanAnsi` (可选): 当 `raw=true` 时，是否清理 ANSI 控制序列并折叠重复刷屏，默认 true
+- `maxChars` (可选): 单次返回的最大字符数（默认 12000，超出会自动截断并给出提示）
 
 **返回**：
 - `output`: 输出内容
