@@ -233,7 +233,7 @@ claude mcp add persistent-terminal \
 
 #### macOS / Linux
 
-在 `.codex/config.toml` 文件中添加以下配置：
+在 .codex/config.toml 文件中添加以下配置：
 
 ```toml
 # MCP Server Configuration (TOML Format)
@@ -241,18 +241,22 @@ claude mcp add persistent-terminal \
 
 [mcp_servers.persistent-terminal]
 command = "npx"
-args = ["-y", "persistent-terminal-mcp"]
+args = ["-y", "persistent-terminal-mcp@1.0.9"]
+enabled = true
+startup_timeout_sec = 30
+tool_timeout_sec = 60
 
 [mcp_servers.persistent-terminal.env]
 MAX_BUFFER_SIZE = "10000"
 SESSION_TIMEOUT = "86400000"
 COMPACT_ANIMATIONS = "true"
 ANIMATION_THROTTLE_MS = "100"
+READ_TERMINAL_MAX_CHARS = "12000"
 ```
 
 #### Windows
 
-在 `.codex/config.toml` 文件中添加以下配置：
+在 .codex/config.toml 文件中添加以下配置：
 
 ```toml
 # MCP Server Configuration (TOML Format)
@@ -260,16 +264,23 @@ ANIMATION_THROTTLE_MS = "100"
 
 [mcp_servers.persistent-terminal]
 command = "cmd"
-args = ["/c", "npx", "-y", "persistent-terminal-mcp"]
+args = ["/c", "npx", "-y", "persistent-terminal-mcp@1.0.9"]
+enabled = true
+startup_timeout_sec = 30
+tool_timeout_sec = 60
 
 [mcp_servers.persistent-terminal.env]
 MAX_BUFFER_SIZE = "10000"
 SESSION_TIMEOUT = "86400000"
 COMPACT_ANIMATIONS = "true"
 ANIMATION_THROTTLE_MS = "100"
+READ_TERMINAL_MAX_CHARS = "12000"
 ```
 
-**说明**：Windows 需要通过 `cmd /c` 来调用 `npx`
+**说明**：
+- `persistent-terminal-mcp` 是 **STDIO** 类型 MCP server（不是 HTTP/SSE）。
+- Windows 需要通过 `cmd /c` 调用 `npx`。
+- 若出现 “initialize response / connection closed”，通常是启动超时或旧版本导致，优先确认使用 `@1.0.9`，并适当增大 `startup_timeout_sec`。
 
 ---
 
@@ -280,6 +291,7 @@ ANIMATION_THROTTLE_MS = "100"
 | `SESSION_TIMEOUT` | 会话超时时间（毫秒） | 86400000 (24小时) |
 | `COMPACT_ANIMATIONS` | 是否启用 Spinner 压缩 | true |
 | `ANIMATION_THROTTLE_MS` | 动画节流时间（毫秒） | 100 |
+| `READ_TERMINAL_MAX_CHARS` | read_terminal 单次最大返回字符数 | 12000 |
 | `MCP_DEBUG` | 是否启用调试日志 | false |
 
 ## 🧱 TypeScript 程序化使用
@@ -308,7 +320,7 @@ await server.connect(/* 自定义 transport */);
 |------|------|----------|
 | `create_terminal` | 创建持久终端会话 | `shell`, `cwd`, `env`, `cols`, `rows` |
 | `create_terminal_basic` | 精简版创建入口 | `shell`, `cwd` |
-| `write_terminal` | 向终端写入命令 | `terminalId`, `input`, `appendNewline` |
+| `write_terminal` | 向终端写入命令 | `terminalId`, `input`, `appendNewline`, `sendEnter` |
 | `read_terminal` | 读取缓冲输出 | `terminalId`, `mode`, `since`, `stripSpinner`, `raw`, `cleanAnsi`, `maxChars` |
 | `wait_for_output` | 等待输出稳定 | `terminalId`, `timeout`, `stableTime` |
 | `get_terminal_stats` | 查看统计信息 | `terminalId` |
@@ -343,8 +355,12 @@ await server.connect(/* 自定义 transport */);
 - `terminalId`: 终端 ID
 - `input`: 要发送的内容
 - `appendNewline` (可选): 是否自动添加换行符，默认 true
+- `sendEnter` (可选): 强制发送一次回车（CR），适合交互式程序“只按回车继续”场景
 
-**提示**：默认会自动添加换行符执行命令，如需发送原始控制字符（如方向键），请设置 `appendNewline: false`。
+**提示**：
+- 默认会自动添加换行符执行命令；即使 `input` 为空，也会默认发送一次回车，避免交互式会话卡在“等待回车”。
+- 如需发送原始控制字符（如方向键），请设置 `appendNewline: false`。
+- 如需显式“只发回车”，建议：`input: "", sendEnter: true`。
 
 #### `read_terminal` - 读取输出
 读取终端的缓冲输出，支持多种智能截断模式。
@@ -364,6 +380,15 @@ await server.connect(/* 自定义 transport */);
 - `raw` (可选): 是否读取原始 PTY 输出流（适合 Codex/vim 等 TUI，避免历史回放丢失）
 - `cleanAnsi` (可选): 当 `raw=true` 时，是否清理 ANSI 控制序列并折叠重复刷屏，默认 true
 - `maxChars` (可选): 单次返回的最大字符数（默认 12000，超出会自动截断并给出提示）
+
+**Claude / Codex 场景建议**：
+- 优先使用：`mode: "tail"`, `tailLines: 120`, `raw: true`, `cleanAnsi: true`, `maxChars: 8000`
+- 避免直接 `mode: "full" + raw: true`，否则容易把大段 TUI 刷屏控制流塞进上下文。
+- 说明：从 `1.0.8` 开始，`raw=true` 下也会严格应用 `mode=head/tail/head-tail`，便于稳定读取“最后 N 行”。
+- 如果用户要求“最后 10 行”，优先：`mode: "tail"`, `tailLines: 10`, `raw: true`, `cleanAnsi: true`；若仍不完整，再用 `head-tail` 补读。
+
+**Codex 聊天发送建议**：
+- 先发送文本消息；若仍显示等待提交（Running 持续、无新回复），补发一次回车：`input: "", sendEnter: true`。
 
 **返回**：
 - `output`: 输出内容

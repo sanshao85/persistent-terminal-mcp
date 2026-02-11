@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.9] - 2026-02-11
+
+### Improved
+- 强化 MCP 工具描述：`read_terminal` 明确“最后 N 行”在 Codex/TUI 场景下应优先使用 `tail + raw + cleanAnsi`，不完整时改用 `head-tail` 补读。
+- 强化 `write_terminal` 描述：在 Codex 聊天等待提交时，明确建议使用 `input=""` + `sendEnter=true` 补发回车。
+- 新增 MCP prompt：`codex-tui-best-practices`，提供可直接照抄的“读最后10行 + 回车补发 + 稳定轮询”工作流。
+
+## [1.0.8] - 2026-02-11
+
+### Fixed
+- 修复 `read_terminal` 在 `raw=true` 时忽略 `mode=head/tail/head-tail` 的问题；现在可稳定读取“最后 N 行”与“头尾摘要”。
+
+### Improved
+- `read_terminal` 在 raw 模式返回中新增 `Raw Mode Filter` 和 `Raw Lines Omitted` 元数据，便于定位是否真正按 tail/head-tail 读取。
+- 新增集成测试覆盖 raw tail/head-tail 行为，防止回归。
+
+## [1.0.7] - 2026-02-11
+
+### Fixed
+- 修复交互式会话中“只发送回车”不稳定的问题：`write_terminal` 现在对空输入默认发送 Enter（CR），避免 Codex 聊天卡在等待提交状态。
+
+### Added
+- `write_terminal` 新增 `sendEnter` 参数：可显式强制发送回车键，适合“继续/提交”这类 Enter-only 场景。
+
+### Improved
+- MCP 工具描述与内置 usage prompt 增强：明确给出 Claude/Codex 场景下的 `read_terminal` 推荐参数组合（`tail + raw + cleanAnsi + maxChars`）。
+
 ## [1.0.6] - 2026-02-10
 
 ### Changed

@@ -22,6 +22,7 @@ export declare class PersistentTerminalMcpServer {
      */
     private setupTools;
     private resolveReadMaxChars;
+    private applyModeToRawText;
     private truncateForContext;
     private sanitizeRawTerminalOutput;
     private skipAnsiSequence;

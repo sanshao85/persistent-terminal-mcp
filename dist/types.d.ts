@@ -32,6 +32,7 @@ export interface TerminalWriteOptions {
     terminalId: string;
     input: string;
     appendNewline?: boolean;
+    sendEnter?: boolean;
 }
 export interface TerminalReadOptions {
     terminalId: string;
@@ -140,6 +141,7 @@ export interface WriteTerminalInput {
     terminalId: string;
     input: string;
     appendNewline?: boolean;
+    sendEnter?: boolean;
 }
 export interface WriteTerminalResult {
     success: boolean;

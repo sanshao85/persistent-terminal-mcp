@@ -172,6 +172,64 @@ describe('TerminalManager', () => {
       (terminalManager as any).sessions.delete(fakeId);
     });
 
+    test('should send carriage return for empty input by default', async () => {
+      const fakeId = 'empty-default-enter-terminal';
+      const fakeWrite = jest.fn();
+      const fakeSession = {
+        id: fakeId,
+        pid: 22349,
+        shell: '/bin/bash',
+        cwd: process.cwd(),
+        env: {} as Record<string, string>,
+        created: new Date(),
+        lastActivity: new Date(),
+        status: 'active' as const
+      };
+
+      (terminalManager as any).ptyProcesses.set(fakeId, { write: fakeWrite });
+      (terminalManager as any).sessions.set(fakeId, fakeSession);
+
+      await terminalManager.writeToTerminal({
+        terminalId: fakeId,
+        input: ''
+      });
+
+      expect(fakeWrite).toHaveBeenCalledWith('\r');
+
+      (terminalManager as any).ptyProcesses.delete(fakeId);
+      (terminalManager as any).sessions.delete(fakeId);
+    });
+
+    test('should allow sendEnter to force carriage return even without appendNewline', async () => {
+      const fakeId = 'force-enter-terminal';
+      const fakeWrite = jest.fn();
+      const fakeSession = {
+        id: fakeId,
+        pid: 22350,
+        shell: '/bin/bash',
+        cwd: process.cwd(),
+        env: {} as Record<string, string>,
+        created: new Date(),
+        lastActivity: new Date(),
+        status: 'active' as const
+      };
+
+      (terminalManager as any).ptyProcesses.set(fakeId, { write: fakeWrite });
+      (terminalManager as any).sessions.set(fakeId, fakeSession);
+
+      await terminalManager.writeToTerminal({
+        terminalId: fakeId,
+        input: '',
+        appendNewline: false,
+        sendEnter: true
+      });
+
+      expect(fakeWrite).toHaveBeenCalledWith('\r');
+
+      (terminalManager as any).ptyProcesses.delete(fakeId);
+      (terminalManager as any).sessions.delete(fakeId);
+    });
+
     test('should normalize explicit newline input to carriage return', async () => {
       const fakeId = 'normalize-terminal';
       const fakeWrite = jest.fn();

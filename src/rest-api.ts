@@ -151,26 +151,31 @@ export class RestApiServer {
     this.app.post('/terminals/:terminalId/input', async (req: Request, res: Response): Promise<void> => {
       try {
         const terminalId = req.params.terminalId;
-        const { input, appendNewline } = req.body as WriteTerminalInput;
+        const { input, appendNewline, sendEnter } = req.body as Partial<WriteTerminalInput>;
 
         if (!terminalId) {
           res.status(400).json({ error: 'Terminal ID is required' });
           return;
         }
 
-        if (!input) {
+        if (typeof input !== 'string' && sendEnter !== true) {
           res.status(400).json({
-            error: 'Input is required'
+            error: 'Input must be a string, or set sendEnter=true for Enter-only input'
           });
           return;
         }
 
+        const normalizedInput = typeof input === 'string' ? input : '';
+
         const writeOptions: any = {
           terminalId,
-          input
+          input: normalizedInput
         };
         if (appendNewline !== undefined) {
           writeOptions.appendNewline = appendNewline;
+        }
+        if (sendEnter !== undefined) {
+          writeOptions.sendEnter = sendEnter;
         }
         await this.terminalManager.writeToTerminal(writeOptions);
 

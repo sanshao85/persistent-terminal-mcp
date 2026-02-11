@@ -196,7 +196,7 @@ Configuration is similar to Claude Desktop. Please refer to the MCP configuratio
 
 #### macOS / Linux
 
-Add the following to `.codex/config.toml`:
+Add the following to .codex/config.toml:
 
 ```toml
 # MCP Server Configuration (TOML Format)
@@ -204,18 +204,22 @@ Add the following to `.codex/config.toml`:
 
 [mcp_servers.persistent-terminal]
 command = "npx"
-args = ["-y", "persistent-terminal-mcp"]
+args = ["-y", "persistent-terminal-mcp@1.0.9"]
+enabled = true
+startup_timeout_sec = 30
+tool_timeout_sec = 60
 
 [mcp_servers.persistent-terminal.env]
 MAX_BUFFER_SIZE = "10000"
 SESSION_TIMEOUT = "86400000"
 COMPACT_ANIMATIONS = "true"
 ANIMATION_THROTTLE_MS = "100"
+READ_TERMINAL_MAX_CHARS = "12000"
 ```
 
 #### Windows
 
-Add the following to `.codex/config.toml`:
+Add the following to .codex/config.toml:
 
 ```toml
 # MCP Server Configuration (TOML Format)
@@ -223,16 +227,23 @@ Add the following to `.codex/config.toml`:
 
 [mcp_servers.persistent-terminal]
 command = "cmd"
-args = ["/c", "npx", "-y", "persistent-terminal-mcp"]
+args = ["/c", "npx", "-y", "persistent-terminal-mcp@1.0.9"]
+enabled = true
+startup_timeout_sec = 30
+tool_timeout_sec = 60
 
 [mcp_servers.persistent-terminal.env]
 MAX_BUFFER_SIZE = "10000"
 SESSION_TIMEOUT = "86400000"
 COMPACT_ANIMATIONS = "true"
 ANIMATION_THROTTLE_MS = "100"
+READ_TERMINAL_MAX_CHARS = "12000"
 ```
 
-**Note**: Windows requires `cmd /c` to invoke `npx`
+**Notes**:
+- `persistent-terminal-mcp` is a **STDIO** MCP server (not HTTP/SSE).
+- Windows must invoke `npx` via `cmd /c`.
+- If you see “initialize response / connection closed”, it is usually startup timeout or old package version. Confirm `@1.0.9` and increase `startup_timeout_sec` if needed.
 
 ---
 
@@ -243,6 +254,7 @@ ANIMATION_THROTTLE_MS = "100"
 | `SESSION_TIMEOUT` | Session timeout in milliseconds | 86400000 (24 hours) |
 | `COMPACT_ANIMATIONS` | Enable spinner animation compaction | true |
 | `ANIMATION_THROTTLE_MS` | Animation throttle time in milliseconds | 100 |
+| `READ_TERMINAL_MAX_CHARS` | Max characters returned by one read_terminal call | 12000 |
 | `MCP_DEBUG` | Enable debug logging | false |
 
 ## Programmatic Usage (TypeScript)
@@ -272,7 +284,7 @@ module. Refer to [`src/index.ts`](src/index.ts) for the complete export list.
 |------|---------|
 | `create_terminal` | Create a persistent terminal session (supports `env`, `shell`, and `cwd`) |
 | `create_terminal_basic` | Convenience alias for clients that can only send simple strings |
-| `write_terminal` | Send input to a terminal; newline is added automatically if needed |
+| `write_terminal` | Send input to a terminal; newline is added automatically if needed (`sendEnter` supported) |
 | `read_terminal` | Retrieve buffered output with smart truncation options |
 | `wait_for_output` | Wait for terminal output to stabilize (useful after running commands) |
 | `get_terminal_stats` | Inspect buffer size, line counts, estimated tokens, and activity |
@@ -281,6 +293,17 @@ module. Refer to [`src/index.ts`](src/index.ts) for the complete export list.
 
 Additional MCP resources and prompts are exposed for listing sessions, viewing
 output, and surfacing troubleshooting tips inside compatible clients.
+
+### Recommended Tool Usage (Claude / Codex TUI)
+- Use `write_terminal` with plain text and rely on default newline behavior.
+- For explicit Enter-only actions (e.g. continue a prompt), call:
+  - `input: ""`, `sendEnter: true`
+- For Codex/vim-like full-screen apps, prefer `read_terminal` with:
+  - `mode: "tail"`, `tailLines: 120`, `raw: true`, `cleanAnsi: true`, `maxChars: 8000`
+- Avoid `mode: "full" + raw: true` unless you really need the whole raw stream.
+- Note: starting from `1.0.8`, mode filters (`head`/`tail`/`head-tail`) are also applied when `raw=true`.
+- If a user asks for the "last 10 lines", use `tail + raw + cleanAnsi`; if incomplete, retry with `head-tail + raw + cleanAnsi`.
+- For Codex chat turns that appear stuck waiting for submit, send Enter explicitly with `input: ""`, `sendEnter: true`.
 
 ## REST API (Optional)
 If you prefer HTTP, start the REST variant:

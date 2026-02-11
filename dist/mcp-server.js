@@ -364,14 +364,15 @@ Fix tool: OpenAI Codex
             }
         });
         // 写入终端工具
-        this.server.tool('write_terminal', 'Write input to a terminal session. Commands add a newline by default, but you can disable that for raw control sequences.', {
+        this.server.tool('write_terminal', 'Write input to a terminal session. For Codex/LLM chat: send message text first, then force Enter with sendEnter=true when the app appears to wait for submission.', {
             terminalId: z.string().describe('Terminal session ID'),
-            input: z.string().describe('Input to send to the terminal. Newline will be automatically added if not present to execute the command.'),
-            appendNewline: z.boolean().optional().describe('Whether to automatically append a newline (default: true). Set to false for raw control sequences like Ctrl+U or backspace.')
+            input: z.string().describe('Input to send to the terminal. For chat text, send the full sentence/paragraph here.'),
+            appendNewline: z.boolean().optional().describe('Whether to append newline automatically. Default true for normal text. Keep false only for raw key/control sequences.'),
+            sendEnter: z.boolean().optional().describe('Force one Enter key (CR). Recommended for Enter-only actions (input="") or when Codex/TUI appears to be waiting for submit.')
         }, {
             title: 'Write to Terminal',
             readOnlyHint: false
-        }, async ({ terminalId, input, appendNewline }) => {
+        }, async ({ terminalId, input, appendNewline, sendEnter }) => {
             try {
                 const writeOptions = {
                     terminalId,
@@ -380,12 +381,15 @@ Fix tool: OpenAI Codex
                 if (appendNewline !== undefined) {
                     writeOptions.appendNewline = appendNewline;
                 }
+                if (sendEnter !== undefined) {
+                    writeOptions.sendEnter = sendEnter;
+                }
                 await this.terminalManager.writeToTerminal(writeOptions);
                 return {
                     content: [
                         {
                             type: 'text',
-                            text: `Input sent to terminal ${terminalId} successfully.`
+                            text: `Input sent to terminal ${terminalId} successfully.${sendEnter ? ' (Enter forced)' : ''}`
                         }
                     ]
                 };
@@ -403,15 +407,15 @@ Fix tool: OpenAI Codex
             }
         });
         // 读取终端工具（增强版）
-        this.server.tool('read_terminal', 'Read output from a terminal session with smart truncation options', {
+        this.server.tool('read_terminal', 'Read output from a terminal session. For Codex/TUI conversation, use mode="tail" + raw=true + cleanAnsi=true. If tail seems incomplete, retry with mode="head-tail" in raw mode.', {
             terminalId: z.string().describe('Terminal session ID'),
             since: z.number().optional().describe('Line number to start reading from (default: 0)'),
             maxLines: z.number().optional().describe('Maximum number of lines to read (default: 1000)'),
-            mode: z.enum(['full', 'head', 'tail', 'head-tail']).optional().describe('Reading mode: full (default), head (first N lines), tail (last N lines), or head-tail (first + last N lines)'),
+            mode: z.enum(['full', 'head', 'tail', 'head-tail']).optional().describe('Reading mode: full, head, tail, head-tail. For recent chat turns, prefer tail. For screen-refresh TUI recovery, use head-tail.'),
             headLines: z.number().optional().describe('Number of lines to show from the beginning when using head or head-tail mode (default: 50)'),
-            tailLines: z.number().optional().describe('Number of lines to show from the end when using tail or head-tail mode (default: 50)'),
+            tailLines: z.number().optional().describe('Number of lines from the end in tail/head-tail mode. For chat checks, 10-30 is a good starting range.'),
             stripSpinner: z.boolean().optional().describe('Whether to strip spinner/animation frames (uses global setting if not specified)'),
-            raw: z.boolean().optional().describe('Read raw PTY stream (TUI-safe but may be noisy). Default: false'),
+            raw: z.boolean().optional().describe('Read raw PTY stream. Strongly recommended for Codex/vim-like TUIs to avoid missing lines caused by cursor redraw.'),
             cleanAnsi: z.boolean().optional().describe('When raw=true, sanitize ANSI/control sequences into readable text. Default: true'),
             maxChars: z.number().optional().describe('Maximum characters returned in this tool response (default: 12000, hard cap for context safety)')
         }, {
@@ -437,8 +441,26 @@ Fix tool: OpenAI Codex
                 const cleanedOutput = useRawRead && cleanAnsi !== false
                     ? this.sanitizeRawTerminalOutput(originalOutput)
                     : originalOutput;
+                const rawModeOptions = {};
+                if (mode !== undefined) {
+                    rawModeOptions.mode = mode;
+                }
+                if (headLines !== undefined) {
+                    rawModeOptions.headLines = headLines;
+                }
+                if (tailLines !== undefined) {
+                    rawModeOptions.tailLines = tailLines;
+                }
+                const modeAdjusted = useRawRead
+                    ? this.applyModeToRawText(cleanedOutput, rawModeOptions)
+                    : {
+                        output: cleanedOutput,
+                        mode: mode || 'full',
+                        modeApplied: false,
+                        linesOmitted: 0
+                    };
                 const charLimit = this.resolveReadMaxChars(maxChars);
-                const truncation = this.truncateForContext(cleanedOutput, charLimit);
+                const truncation = this.truncateForContext(modeAdjusted.output, charLimit);
                 const finalOutput = truncation.output;
                 let outputText = `Terminal Output (${terminalId}):\n\n${finalOutput}\n\n--- End of Output ---\n`;
                 outputText += `Total Lines: ${result.totalLines}\n`;
@@ -452,6 +474,12 @@ Fix tool: OpenAI Codex
                 if (useRawRead) {
                     outputText += `\nRaw Replay: Enabled (TUI-safe)`;
                     outputText += `\nANSI Cleanup: ${cleanAnsi === false ? 'Disabled' : 'Enabled'}`;
+                    if (modeAdjusted.modeApplied) {
+                        outputText += `\nRaw Mode Filter: ${modeAdjusted.mode}`;
+                        if (modeAdjusted.linesOmitted > 0) {
+                            outputText += `\nRaw Lines Omitted: ${modeAdjusted.linesOmitted}`;
+                        }
+                    }
                 }
                 if (truncation.truncated) {
                     outputText += `\nContext Guard: Truncated to ${charLimit} chars (omitted ${truncation.omittedChars} chars)`;
@@ -845,6 +873,66 @@ The more detailed, the better the fix!`),
         // Hard upper bound to avoid flooding model context
         return Math.min(maxChars, 50000);
     }
+    applyModeToRawText(output, options) {
+        const mode = options.mode || 'full';
+        if (mode === 'full' || !output) {
+            return {
+                output,
+                mode,
+                modeApplied: false,
+                linesOmitted: 0
+            };
+        }
+        const lines = output.split('\n');
+        const total = lines.length;
+        const safeHead = Number.isFinite(options.headLines) && (options.headLines || 0) > 0
+            ? Math.floor(options.headLines)
+            : 50;
+        const safeTail = Number.isFinite(options.tailLines) && (options.tailLines || 0) > 0
+            ? Math.floor(options.tailLines)
+            : 50;
+        if (mode === 'head') {
+            const shown = lines.slice(0, safeHead);
+            const linesOmitted = Math.max(0, total - shown.length);
+            return {
+                output: linesOmitted > 0
+                    ? `${shown.join('\n')}\n\n... [省略后续 ${linesOmitted} 行] ...`
+                    : shown.join('\n'),
+                mode,
+                modeApplied: true,
+                linesOmitted
+            };
+        }
+        if (mode === 'tail') {
+            const shown = lines.slice(-safeTail);
+            const linesOmitted = Math.max(0, total - shown.length);
+            return {
+                output: linesOmitted > 0
+                    ? `... [省略前面 ${linesOmitted} 行] ...\n\n${shown.join('\n')}`
+                    : shown.join('\n'),
+                mode,
+                modeApplied: true,
+                linesOmitted
+            };
+        }
+        const head = lines.slice(0, safeHead);
+        const tail = lines.slice(-safeTail);
+        const linesOmitted = Math.max(0, total - head.length - tail.length);
+        if (linesOmitted <= 0) {
+            return {
+                output: lines.join('\n'),
+                mode,
+                modeApplied: true,
+                linesOmitted: 0
+            };
+        }
+        return {
+            output: `${head.join('\n')}\n\n... [省略 ${linesOmitted} 行] ...\n\n${tail.join('\n')}`,
+            mode,
+            modeApplied: true,
+            linesOmitted
+        };
+    }
     truncateForContext(output, maxChars) {
         if (!output || output.length <= maxChars) {
             return {
@@ -877,6 +965,11 @@ The more detailed, the better the fix!`),
                 continue;
             }
             if (char === '\r') {
+                const nextChar = raw[i + 1];
+                if (nextChar === '\n') {
+                    // Keep current line content for CRLF; newline handler will flush it.
+                    continue;
+                }
                 currentLine = '';
                 continue;
             }
@@ -1065,11 +1158,28 @@ Creates a new persistent terminal session.
 Sends input to a terminal session.
 - Parameters: terminalId (required), input (required)
 - Use this to execute commands or send interactive input
+- appendNewline defaults to true for normal text; empty input also sends Enter by default
+- For explicit Enter-only actions (common in Codex chat), prefer input: "" with sendEnter: true
+
+Codex/LLM chat send pattern (important):
+1) Send text turn with write_terminal (input = your message)
+2) If output status remains Running or app appears waiting for submit, send Enter explicitly:
+   - write_terminal with input: "", sendEnter: true
+3) Then call wait_for_output and read_terminal
 
 ### 3. read_terminal
 Reads output from a terminal session.
 - Parameters: terminalId (required), since (optional), maxLines (optional)
 - Returns buffered output, supports pagination
+- For Codex/vim-like TUI apps, prefer mode: "tail", tailLines: 120, raw: true, cleanAnsi: true, maxChars: 8000
+- Avoid mode: "full" + raw: true unless full raw replay is truly needed
+
+If user asks "last 10 lines" in Codex/TUI:
+- First try: mode: "tail", tailLines: 10, raw: true, cleanAnsi: true
+- If content looks incomplete due to redraw/refresh:
+  - Retry with mode: "head-tail", headLines: 30, tailLines: 30, raw: true, cleanAnsi: true
+  - Optionally increase maxChars (e.g. 20000) for longer assistant replies
+- Verify by checking metadata: Raw Mode Filter should match requested mode
 
 ### 4. list_terminals
 Lists all active terminal sessions.
@@ -1086,6 +1196,14 @@ Terminates a terminal session.
 2. Send commands: write_terminal with the terminal ID and command
 3. Read output: read_terminal to get the command results
 4. Continue interaction or create more terminals as needed
+
+## Recommended workflow for Codex conversation:
+
+1. write_terminal with message text
+2. wait_for_output (timeout 10000-25000, stableTime 2000-5000)
+3. read_terminal with tail+raw+cleanAnsi
+4. If answer seems truncated, retry read_terminal with head-tail+raw+cleanAnsi
+5. If still waiting/running unexpectedly, send Enter via write_terminal(input: "", sendEnter: true)
 
 ## Features:
 
@@ -1125,17 +1243,21 @@ Issue reported: "${issue}"
 - The command might still be running
 - Try reading with different 'since' parameter
 - Check if the terminal is still active
+- For Codex/TUI sessions, retry read_terminal with: mode="tail", raw=true, cleanAnsi=true
+- If "last 10 lines" still looks incomplete, switch to mode="head-tail" with raw=true
 
 ### Command Not Executing
 - Ensure you're sending the complete command with newline (\\n)
 - Check if the terminal is waiting for input
 - Verify the command syntax for the shell being used
+- For chat-like prompts waiting on Enter, send: write_terminal(input="", sendEnter=true)
 
 ### Interactive Commands
 - For interactive commands (vim, nano, etc.), you may need to:
   - Send specific key sequences
   - Use appropriate escape sequences
   - Consider the terminal's current state
+- Codex chat also behaves like an interactive TUI; treat message submission as Enter-sensitive
 
 ### Performance Issues
 - Large output buffers can slow down reading
@@ -1150,6 +1272,54 @@ Issue reported: "${issue}"
 4. Check terminal manager stats for resource usage
 
 Would you like specific help with your issue?`
+                        }
+                    }
+                ]
+            };
+        });
+        // Codex/TUI 使用最佳实践提示
+        this.server.prompt('codex-tui-best-practices', 'Best practices for reading Codex/TUI output and sending Enter correctly', {
+            terminalId: z.string().optional().describe('Optional terminal ID for concrete command examples')
+        }, async ({ terminalId }) => {
+            const sampleId = terminalId || '<terminal-id>';
+            return {
+                messages: [
+                    {
+                        role: 'user',
+                        content: {
+                            type: 'text',
+                            text: `# Codex / TUI Best Practices
+
+Use this checklist when interacting with Codex-like full-screen terminal apps.
+
+## 1) Sending chat input safely
+
+- Send message text with write_terminal first
+- If the app still appears to be waiting, send Enter explicitly:
+  - write_terminal(terminalId="${sampleId}", input="", sendEnter=true)
+
+## 2) Reading the latest conversation
+
+Preferred call for recent output:
+- read_terminal(terminalId="${sampleId}", mode="tail", tailLines=10~30, raw=true, cleanAnsi=true, maxChars=8000~20000)
+
+If "last 10 lines" looks incomplete (common with ANSI redraw):
+- retry with read_terminal(mode="head-tail", headLines=30, tailLines=30, raw=true, cleanAnsi=true)
+
+## 3) Verify the read mode actually applied
+
+Check metadata in response:
+- Raw Mode Filter: should match requested mode (tail/head-tail)
+- Raw Lines Omitted: indicates lines skipped outside requested window
+
+## 4) Stable turn-by-turn loop
+
+1. write_terminal(message)
+2. wait_for_output(timeout=10000~25000, stableTime=2000~5000)
+3. read_terminal(tail + raw + cleanAnsi)
+4. If no final answer yet, send Enter with input="", sendEnter=true and repeat
+
+This avoids missing replies and prevents context bloat from full raw dumps.`
                         }
                     }
                 ]

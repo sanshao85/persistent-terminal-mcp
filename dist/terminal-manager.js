@@ -153,7 +153,7 @@ export class TerminalManager extends EventEmitter {
      * 向终端写入数据
      */
     async writeToTerminal(options) {
-        const { terminalId, input, appendNewline } = options;
+        const { terminalId, input, appendNewline, sendEnter } = options;
         const ptyProcess = this.ptyProcesses.get(terminalId);
         const session = this.sessions.get(terminalId);
         if (!ptyProcess || !session) {
@@ -171,11 +171,15 @@ export class TerminalManager extends EventEmitter {
         try {
             // 如果输入不以换行符结尾，自动添加换行符以执行命令
             // 这样用户可以直接发送 "ls" 而不需要手动添加 "\n"
-            const autoAppend = appendNewline ?? this.shouldAutoAppendNewline(input);
+            const forceEnter = sendEnter === true;
+            const autoAppend = forceEnter || (appendNewline ?? this.shouldAutoAppendNewline(input));
             const needsNewline = autoAppend && !input.endsWith('\n') && !input.endsWith('\r');
             const newlineChar = '\r';
             const inputWithAutoNewline = needsNewline ? input + newlineChar : input;
             const inputToWrite = this.normalizeNewlines(inputWithAutoNewline);
+            if (!inputToWrite) {
+                return;
+            }
             // 写入数据到 PTY
             // node-pty 的 write 方法是同步的，但我们需要确保数据被发送
             const written = ptyProcess.write(inputToWrite);
@@ -219,8 +223,9 @@ export class TerminalManager extends EventEmitter {
             .replace(/\n/g, '\r');
     }
     shouldAutoAppendNewline(input) {
-        if (!input) {
-            return false;
+        // 对于空输入，默认按一次 Enter，便于交互式会话（如 Codex 聊天）
+        if (input.length === 0) {
+            return true;
         }
         if (input.includes('')) {
             return false;

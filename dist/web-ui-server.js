@@ -164,11 +164,12 @@ export class WebUIServer {
                     res.status(400).json({ error: 'Terminal ID is required' });
                     return;
                 }
-                const { input, appendNewline } = req.body;
+                const { input, appendNewline, sendEnter } = req.body;
                 await this.terminalManager.writeToTerminal({
                     terminalId: id,
                     input,
-                    appendNewline
+                    appendNewline,
+                    sendEnter
                 });
                 res.json({ success: true });
             }
